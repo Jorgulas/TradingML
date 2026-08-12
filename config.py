@@ -75,3 +75,101 @@ HORIZON_PARAMS = {
 }
 
 MIN_TRAIN_ROWS = 60  # minimo de linhas rotuladas antes de treinar um modelo real
+
+
+# ---------------------------------------------------------------------------
+# Reconhecimento de padroes graficos + previsao de sequencia de padroes
+# ---------------------------------------------------------------------------
+# Subsistema independente do de cima: em vez de prever direcao do preco a
+# partir de features tabulares, deteta padroes classicos de analise tecnica e
+# aprende com que probabilidade um padrao e' seguido de outro (cadeia de
+# Markov de 1a ordem sobre o alfabeto de padroes).
+
+# Timeframes suportados e quanto historico o yfinance da' para cada um.
+# Cada timeframe treina a SUA propria matriz de transicoes -- a estatistica de
+# que padrao segue qual nao tem de ser igual a 5 minutos e a 1 hora.
+PATTERN_TIMEFRAMES = {
+    "1h": {"yf_period": "730d", "yf_interval": "1h", "pivot_window": 5},
+    "5m": {"yf_period": "60d", "yf_interval": "5m", "pivot_window": 3},
+}
+PATTERN_LIVE_TIMEFRAME = "5m"   # o que a pagina web usa por omissao
+
+PATTERN_TYPES = [
+    # continuacao / bullish
+    "ASCENDING_TRIANGLE",
+    "SYMMETRICAL_TRIANGLE",
+    "BULL_FLAG",
+    "PENNANT",
+    "CUP_WITH_HANDLE",
+    "RECTANGLE_BOTTOM",
+    # continuacao / bearish
+    "DESCENDING_TRIANGLE",
+    "BEAR_FLAG",
+    "INVERSE_CUP_WITH_HANDLE",
+    "RECTANGLE_TOP",
+    # reversao
+    "DOUBLE_BOTTOM",
+    "DOUBLE_TOP",
+    "DIAMOND_BOTTOM",
+    "DIAMOND_TOP",
+    "HEAD_AND_SHOULDERS_TOP",
+    "INVERSE_HEAD_AND_SHOULDERS",
+]
+
+PATTERN_BIAS = {
+    "ASCENDING_TRIANGLE": "bullish",
+    "SYMMETRICAL_TRIANGLE": "neutral",
+    "BULL_FLAG": "bullish",
+    "PENNANT": "neutral",
+    "CUP_WITH_HANDLE": "bullish",
+    "RECTANGLE_BOTTOM": "bullish",
+    "DESCENDING_TRIANGLE": "bearish",
+    "BEAR_FLAG": "bearish",
+    "INVERSE_CUP_WITH_HANDLE": "bearish",
+    "RECTANGLE_TOP": "bearish",
+    "DOUBLE_BOTTOM": "bullish",
+    "DOUBLE_TOP": "bearish",
+    "DIAMOND_BOTTOM": "bullish",
+    "DIAMOND_TOP": "bearish",
+    "HEAD_AND_SHOULDERS_TOP": "bearish",
+    "INVERSE_HEAD_AND_SHOULDERS": "bullish",
+}
+
+# Parametros de deteccao geometrica. Ver README (seccao "Parametros de
+# deteccao") para a justificacao de cada valor -- foram escolhidos a olhar
+# para quantos padroes cada combinacao produz de facto no historico real,
+# nao por defeito arbitrario.
+PATTERN_DETECTION = {
+    "level_tolerance": 0.02,      # 2%: dois topos/fundos "ao mesmo nivel"
+    "min_pattern_bars": 12,       # abaixo disto e' ruido, nao padrao
+    "max_pattern_bars": 150,      # acima disto ja' nao e' uma formacao unica
+    "min_r2": 0.70,               # qualidade minima do ajuste das trendlines
+    # Zona morta deliberada entre os dois: um declive entre flat_slope_max e
+    # min_slope nao e' nem "plano" nem "inclinado", e nao produz deteccao.
+    # Sem esta separacao, declives ambiguos caem sempre no primeiro ramo do
+    # if (triangulo ascendente) e nunca se detecta um simetrico.
+    "flat_slope_max": 0.00035,    # |declive| por barra, normalizado ao preco
+    "min_slope": 0.0009,          # declive minimo para contar como inclinado
+    "cup_min_r2": 0.55,           # taca: parabola sobre precos reais e' mais ruidosa
+    "flagpole_min_move": 0.03,    # 3% de movimento para haver "mastro"
+    "flagpole_max_bars": 25,
+    "flag_max_bars": 60,          # flags/pennants sao formacoes curtas
+    "min_pattern_height": 0.015,  # amplitude minima (1.5%) para nao ser ruido
+    "hs_head_margin": 0.015,      # cabeca tem de exceder os ombros em 1.5%
+    "cup_min_depth": 0.04,        # profundidade minima da chavena
+    "cup_max_depth": 0.35,
+    "cup_handle_max_retrace": 0.5,  # pega nao pode desfazer >50% da chavena
+    "min_quality": 0.55,          # score minimo para aceitar uma deteccao
+}
+
+# Modelo de sequencia (cadeia de Markov sobre padroes).
+PATTERN_SEQUENCE = {
+    "horizon_steps": 4,       # quantos padroes a' frente prever
+    "beam_width": 5,          # caminhos mantidos vivos na beam search
+    "smoothing_alpha": 0.5,   # prior de Jeffreys, aplicado a' distribuicao marginal
+    # Forca do recuo para a marginal (interpolacao de Jelinek-Mercer): com
+    # backoff_k observacoes vindas de um padrao, confia-se meio-a-meio na
+    # estimativa condicional e na marginal. Ver src/patterns/sequence.py.
+    "backoff_k": 10,
+    "min_support": 3,         # abaixo de N observacoes, marcar como low-confidence
+}

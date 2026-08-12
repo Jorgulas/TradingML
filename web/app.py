@@ -11,8 +11,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from db import database
+from src.patterns import live as patterns_live
+from src.patterns.ingest_intraday import load_bars
 
-from flask import Flask, g, jsonify, render_template
+from flask import Flask, g, jsonify, render_template, request
 
 app = Flask(__name__)
 
@@ -172,6 +174,82 @@ def api_signals():
         tickers_out.append(entry)
 
     return jsonify({"date": latest_date, "tickers": tickers_out, "boolean_features": config.BOOLEAN_FEATURES})
+
+
+# ---------------------------------------------------------------------------
+# Padroes graficos (subsistema independente)
+# ---------------------------------------------------------------------------
+
+@app.route("/patterns")
+def patterns_page():
+    return render_template(
+        "patterns.html",
+        tickers=config.TICKERS,
+        timeframes=list(config.PATTERN_TIMEFRAMES),
+        default_timeframe=config.PATTERN_LIVE_TIMEFRAME,
+        pattern_types=config.PATTERN_TYPES,
+    )
+
+
+@app.route("/api/patterns/<ticker>")
+def api_patterns(ticker):
+    ticker = ticker.upper()
+    if ticker not in config.TICKERS:
+        return jsonify({"error": f"ticker desconhecido: {ticker}"}), 404
+    timeframe = request.args.get("timeframe", config.PATTERN_LIVE_TIMEFRAME)
+    if timeframe not in config.PATTERN_TIMEFRAMES:
+        return jsonify({"error": f"timeframe desconhecido: {timeframe}"}), 400
+    return jsonify(patterns_live.analyse(get_db(), ticker, timeframe))
+
+
+@app.route("/api/patterns/<ticker>/bars")
+def api_pattern_bars(ticker):
+    """Barras recentes para desenhar o grafico (so' o necessario, nao o
+    historico todo -- a pagina refresca de poucos em poucos segundos)."""
+    ticker = ticker.upper()
+    if ticker not in config.TICKERS:
+        return jsonify({"error": f"ticker desconhecido: {ticker}"}), 404
+    timeframe = request.args.get("timeframe", config.PATTERN_LIVE_TIMEFRAME)
+    if timeframe not in config.PATTERN_TIMEFRAMES:
+        return jsonify({"error": f"timeframe desconhecido: {timeframe}"}), 400
+    limit = min(int(request.args.get("limit", 300)), 1000)
+
+    bars = load_bars(get_db(), ticker, timeframe, limit=limit)
+    if bars.empty:
+        return jsonify({"bars": []})
+    return jsonify({
+        "bars": [
+            {"ts": ts.isoformat(), "open": row["open"], "high": row["high"],
+             "low": row["low"], "close": row["close"]}
+            for ts, row in bars.iterrows()
+        ]
+    })
+
+
+@app.route("/api/patterns/model")
+def api_pattern_model():
+    """Estado do modelo de sequencia: densidade da matriz e -- sobretudo -- a
+    comparacao honesta contra o baseline de frequencia."""
+    from src.patterns import sequence
+
+    conn = get_db()
+    out = {}
+    for timeframe in config.PATTERN_TIMEFRAMES:
+        transitions = sequence.load_transitions(conn, timeframe)
+        n_patterns = conn.execute(
+            "SELECT COUNT(*) FROM detected_patterns WHERE timeframe = ?", (timeframe,)
+        ).fetchone()[0]
+        metrics = sequence.evaluate(conn, timeframe)
+        out[timeframe] = {
+            "n_patterns": n_patterns,
+            "n_transition_cells": len(transitions),
+            "total_cells": len(config.PATTERN_TYPES) ** 2,
+            "markov_top1_accuracy": metrics.get("markov_top1_accuracy"),
+            "baseline_frequency_accuracy": metrics.get("baseline_frequency_accuracy"),
+            "baseline_pattern": metrics.get("baseline_pattern"),
+            "n_test": metrics.get("n_test"),
+        }
+    return jsonify(out)
 
 
 if __name__ == "__main__":

@@ -168,3 +168,78 @@ CREATE INDEX IF NOT EXISTS idx_predictions_date ON predictions(date, horizon);
 CREATE INDEX IF NOT EXISTS idx_trades_ticker_horizon ON trades(ticker, horizon);
 CREATE INDEX IF NOT EXISTS idx_equity_curve_horizon ON equity_curve(horizon, date);
 CREATE INDEX IF NOT EXISTS idx_outcomes_unresolved ON outcomes(horizon, direction);
+
+
+-- ===========================================================================
+-- Subsistema de padroes graficos (independente do de previsao de direcao)
+-- ===========================================================================
+
+-- Barras intradiarias. ts em ISO8601 UTC. timeframe: '1h', '5m', ...
+CREATE TABLE IF NOT EXISTS intraday_prices (
+    ticker       TEXT NOT NULL REFERENCES watchlist(ticker),
+    timeframe    TEXT NOT NULL,
+    ts           TEXT NOT NULL,
+    open         REAL,
+    high         REAL,
+    low          REAL,
+    close        REAL NOT NULL,
+    volume       INTEGER,
+    ingested_at  TEXT NOT NULL,
+    PRIMARY KEY (ticker, timeframe, ts)
+);
+
+-- Um padrao detectado no historico. confirmed_ts e' quando o padrao passou a
+-- ser CONHECIVEL (o ultimo pivot so fica confirmado pivot_window barras
+-- depois de acontecer) -- e' este o campo a usar para qualquer avaliacao
+-- honesta, nunca end_ts.
+CREATE TABLE IF NOT EXISTS detected_patterns (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker         TEXT NOT NULL REFERENCES watchlist(ticker),
+    timeframe      TEXT NOT NULL,
+    pattern_type   TEXT NOT NULL,
+    start_ts       TEXT NOT NULL,
+    end_ts         TEXT NOT NULL,
+    confirmed_ts   TEXT NOT NULL,
+    start_idx      INTEGER NOT NULL,
+    end_idx        INTEGER NOT NULL,
+    quality        REAL NOT NULL,
+    meta_json      TEXT,
+    detected_at    TEXT NOT NULL,
+    UNIQUE (ticker, timeframe, pattern_type, start_ts, end_ts)
+);
+
+-- Matriz de transicao aprendida: quantas vezes from_pattern foi seguido de
+-- to_pattern. `count` e' o SUPORTE -- uma probabilidade de 60% assente em 2
+-- observacoes nao vale nada e a UI tem de mostrar isso.
+CREATE TABLE IF NOT EXISTS pattern_transitions (
+    timeframe       TEXT NOT NULL,
+    from_pattern    TEXT NOT NULL,
+    to_pattern      TEXT NOT NULL,
+    count           INTEGER NOT NULL,
+    median_bars     REAL,
+    updated_at      TEXT NOT NULL,
+    PRIMARY KEY (timeframe, from_pattern, to_pattern)
+);
+
+-- Snapshot de uma previsao encadeada de N passos feita num dado momento.
+-- step=1..N; step_confidence e' P(este padrao | padrao anterior da cadeia),
+-- cumulative_confidence e' o produto ao longo da cadeia toda ate' aqui.
+CREATE TABLE IF NOT EXISTS pattern_forecasts (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker                  TEXT NOT NULL REFERENCES watchlist(ticker),
+    timeframe               TEXT NOT NULL,
+    as_of_ts                TEXT NOT NULL,
+    from_pattern            TEXT NOT NULL,
+    step                    INTEGER NOT NULL,
+    pattern_type            TEXT NOT NULL,
+    step_confidence         REAL NOT NULL,
+    cumulative_confidence   REAL NOT NULL,
+    expected_bars           REAL,
+    support                 INTEGER NOT NULL,
+    created_at              TEXT NOT NULL,
+    UNIQUE (ticker, timeframe, as_of_ts, step)
+);
+
+CREATE INDEX IF NOT EXISTS idx_intraday_ticker_tf ON intraday_prices(ticker, timeframe, ts);
+CREATE INDEX IF NOT EXISTS idx_patterns_ticker_tf ON detected_patterns(ticker, timeframe, confirmed_ts);
+CREATE INDEX IF NOT EXISTS idx_forecasts_lookup ON pattern_forecasts(ticker, timeframe, as_of_ts);

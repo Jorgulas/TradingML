@@ -44,6 +44,12 @@ def main():
         print(f"ERRO: run_daily.py falhou (exit {daily.returncode})")
         sys.exit(1)
 
+    # Subsistema de padroes: independente do de cima, por isso uma falha aqui
+    # nao invalida a simulacao de carteiras que ja' correu com sucesso.
+    patterns = run([PYTHON, "src/patterns/run_patterns.py"])
+    if patterns.returncode != 0:
+        print(f"AVISO: run_patterns.py falhou (exit {patterns.returncode}) -- carteiras ficaram actualizadas na mesma")
+
     print("=== local_daily_sync concluido ===")
 
 

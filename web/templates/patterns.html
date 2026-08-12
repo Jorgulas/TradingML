@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradingML -- Padroes</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>TradingML</h1>
+    <nav class="nav-links">
+      <a href="/">Carteiras</a>
+      <a href="/patterns" class="active">Padroes</a>
+    </nav>
+    <span class="sim-badge">SIMULACAO -- sem dinheiro real</span>
+  </div>
+  <div class="header-right" id="header-updated">a carregar...</div>
+</header>
+
+<section class="health-strip" id="model-strip">a carregar estado do modelo...</section>
+
+<main>
+  <section class="panel controls-panel">
+    <label>Ticker
+      <select id="ticker-select">
+        {% for t in tickers %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Timeframe
+      <select id="timeframe-select">
+        {% for tf in timeframes %}
+        <option value="{{ tf }}" {% if tf == default_timeframe %}selected{% endif %}>{{ tf }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" id="autorefresh" checked> recalcular automaticamente
+    </label>
+    <button id="refresh-now">recalcular agora</button>
+    <span id="calc-time" class="calc-time"></span>
+  </section>
+
+  <section class="panel">
+    <h2>Grafico <span id="chart-subtitle" class="subtitle"></span></h2>
+    <canvas id="pattern-chart" height="100"></canvas>
+  </section>
+
+  <section class="panel">
+    <h2>Padrao actual</h2>
+    <div id="current-pattern">a carregar...</div>
+  </section>
+
+  <section class="panel">
+    <h2>Cadeia prevista &mdash; proximos 4 padroes</h2>
+    <p class="explainer">
+      Cada passo e' condicionado no padrao <em>previsto</em> no passo anterior, nao no padrao actual.
+      <strong>Condicional</strong> = probabilidade deste padrao assumindo que o anterior da cadeia acontece.
+      <strong>Acumulada</strong> = probabilidade da cadeia inteira ate' aqui (o produto das condicionais),
+      e cai depressa de proposito: acertar quatro eventos incertos seguidos e' mesmo improvavel.
+      <strong>n</strong> = quantas transicoes reais sustentam o numero.
+    </p>
+    <div id="forecast-chain" class="chain"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Padroes recentes detectados</h2>
+    <div class="table-wrap">
+      <table id="recent-patterns">
+        <thead><tr><th>Padrao</th><th>Vies</th><th>Qualidade</th><th>Inicio</th><th>Fim</th><th>Variacao</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Deteccao geometrica de padroes classicos + cadeia de Markov de 1a ordem sobre a sequencia de padroes.
+  Simulacao educativa &mdash; nao e' aconselhamento financeiro.
+</footer>
+
+<script>
+  window.PATTERN_CONFIG = {
+    tickers: {{ tickers | tojson }},
+    timeframes: {{ timeframes | tojson }},
+    defaultTimeframe: {{ default_timeframe | tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='patterns.js') }}"></script>
+</body>
+</html>

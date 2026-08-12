@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from db import database
 from src import features, ingest_prices, model, outcomes
+from src.patterns import backfill, ingest_intraday, sequence
 
 
 def main():
@@ -48,6 +49,17 @@ def main():
                 f"baseline_majority={train_result['baseline_majority']:.4f} "
                 f"baseline_persistence={train_result['baseline_persistence']}"
             )
+
+    print("\nBootstrapping o subsistema de padroes graficos...")
+    ingest_intraday.ingest_all(conn)
+    for timeframe in config.PATTERN_TIMEFRAMES:
+        tally = backfill.backfill_timeframe(conn, timeframe)
+        transitions = sequence.build_transitions(conn, timeframe)
+        sequence.store_transitions(conn, timeframe, transitions)
+        metrics = sequence.evaluate(conn, timeframe)
+        print(f"  {timeframe}: {sum(tally.values())} padroes, {len(transitions)} transicoes, "
+              f"markov={metrics.get('markov_top1_accuracy', 0):.1%} vs "
+              f"baseline={metrics.get('baseline_frequency_accuracy', 0):.1%}")
 
     conn.close()
     print("Bootstrap complete.")
