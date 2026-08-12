@@ -26,7 +26,12 @@
   <section class="panel controls-panel">
     <label>Ticker
       <select id="ticker-select">
-        {% for t in tickers %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        <optgroup label="Transaccionados (carteiras + noticias)">
+          {% for i in instruments if i.traded %}<option value="{{ i.ticker }}">{{ i.ticker }}</option>{% endfor %}
+        </optgroup>
+        <optgroup label="So' padroes (treino da matriz)">
+          {% for i in instruments if not i.traded %}<option value="{{ i.ticker }}">{{ i.ticker }} &middot; {{ i.sector }}</option>{% endfor %}
+        </optgroup>
       </select>
     </label>
     <label>Timeframe
@@ -83,7 +88,7 @@
 
 <script>
   window.PATTERN_CONFIG = {
-    tickers: {{ tickers | tojson }},
+    instruments: {{ instruments | tojson }},
     timeframes: {{ timeframes | tojson }},
     defaultTimeframe: {{ default_timeframe | tojson }}
   };

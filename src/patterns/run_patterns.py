@@ -42,7 +42,7 @@ def main():
 
     live.get_transitions(conn, config.PATTERN_LIVE_TIMEFRAME, refresh=True)
     stored = 0
-    for ticker in config.TICKERS:
+    for ticker in config.PATTERN_TICKERS:
         result = live.analyse(conn, ticker, config.PATTERN_LIVE_TIMEFRAME)
         stored += live.store_forecast(conn, result)
     print(f"snapshots de previsao gravados: {stored}")

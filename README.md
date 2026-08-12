@@ -91,6 +91,22 @@ qual**, prevendo os 4 seguintes em cadeia.
 (topo/fundo), head & shoulders (normal/invertido), cup with handle (normal/
 invertido).
 
+### Dois universos de tickers, e porquê
+
+Os dois sistemas escalam ao contrário um do outro, por isso têm listas
+separadas em `config.py`:
+
+| | `WATCHLIST` (8) | `ALL_INSTRUMENTS` (43) |
+|---|---|---|
+| Usado por | notícias + carteiras simuladas | só deteção de padrões |
+| Escala | mal — o agente Claude pesquisa notícias **empresa a empresa**, todos os dias úteis | bem — é geometria pura, só custa yfinance e CPU |
+| Coluna `active` na BD | 1 | 0 nos 35 extra |
+
+Se os 43 entrassem no sistema de notícias, o custo diário em uso do Claude
+seria 5× maior sem qualquer benefício — o detetor de padrões não olha para
+notícias. Mover um ticker entre universos é editar o `config.py`; a coluna
+`active` é derivada daí a cada arranque.
+
 ```bash
 py src/patterns/ingest_intraday.py    # barras 1h (730d) e 5m (60d)
 py src/patterns/backfill.py           # deteta padroes + treina matriz de transicoes
@@ -156,16 +172,49 @@ baseline de "prever sempre o padrão mais frequente":
 
 | Timeframe | Cadeia de Markov | Baseline frequência | Diferença |
 |---|---|---|---|
-| 1h | 34,9% | 33,3% | **+1,6 pp** |
-| 5m | 18,7% | 20,9% | **−2,2 pp** |
+| 1h | 32,9% | 30,2% | **+2,7 pp** |
+| 5m | 16,8% | 16,6% | **+0,2 pp** |
 
-**Ou seja: saber o padrão atual quase não ajuda a prever o seguinte, para lá
-de saber quais são os padrões mais comuns.** A 1h ganha por uma margem
-pequena; a 5m perde. Isto está visível permanentemente na faixa de topo da
-página `/patterns`, não escondido — é o mesmo tipo de resultado honesto que os
-~50% do primeiro sistema. Com 300-630 padrões espalhados por 256 células da
-matriz, não há dados suficientes para mais; acumular mais meses de histórico é
-o que pode mudar o quadro.
+**A cadeia bate o baseline, mas por pouco.** Saber o padrão atual ajuda a
+prever o seguinte um bocadinho mais do que saber apenas quais são os padrões
+comuns — de forma clara a 1h, quase nada a 5m. Isto está visível
+permanentemente na faixa de topo da página `/patterns`, não escondido.
+
+O efeito de alargar o universo de 8 para 43 tickers está medido:
+
+| | 8 tickers | 43 tickers |
+|---|---|---|
+| Padrões (1h / 5m) | 632 / 300 | 3.436 / 1.895 |
+| Observações por célula (1h / 5m) | 1,69 / 0,79 | **9,20 / 5,00** |
+| Densidade da matriz (1h) | 32,8% | **58,6%** |
+| Vantagem sobre baseline (1h) | +1,6 pp | **+2,7 pp** |
+| Vantagem sobre baseline (5m) | −2,2 pp | **+0,2 pp** |
+
+Mais dados melhoraram mesmo: a 5m a cadeia deixou de **perder** do baseline, e
+as transições principais passaram a assentar em centenas de observações em vez
+de meia dúzia (`BULL_FLAG → BEAR_FLAG` tem agora n=296, antes n=8). Continua a
+ser uma vantagem modesta — o passo seguinte é usar as features já calculadas
+(ver abaixo), que só agora tem dados que o justifiquem.
+
+### O que ainda não é usado (próximo passo óbvio)
+
+O modelo de sequência consome **uma única feature**: a identidade do padrão
+atual. O `SELECT` é literalmente `SELECT pattern_type, end_idx FROM
+detected_patterns`.
+
+Tudo isto é calculado, guardado em `detected_patterns.meta_json`, mostrado na
+interface — e **ignorado pelo modelo**: `quality` da deteção, declives das
+trendlines, R², `pole_move`, `level_diff`, `excursion`, `n_pivots`. Nunca é
+sequer calculado: volume durante o padrão (é ingerido e não usado), hora da
+sessão, regime de volatilidade, posição face à tendência longa.
+
+Com 8 tickers isso era uma escolha forçada — cada feature extra multiplica o
+espaço de estados e com 201 exemplos de treino só agravaria o overfitting. Com
+43 tickers (1.279–2.354 exemplos) já há margem para substituir a contagem por
+um **classificador multiclasse real** (16 classes): entrada = padrão atual em
+one-hot + quality + declives + regime + hora da sessão, saída = distribuição
+sobre o padrão seguinte. A cadeia de 4 passos continua a funcionar por cima
+sem alterações.
 
 ## Testes
 

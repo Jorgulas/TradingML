@@ -27,6 +27,68 @@ WATCHLIST = [
 ]
 TICKERS = [w["ticker"] for w in WATCHLIST]
 
+# Universo alargado, usado APENAS pelo subsistema de padroes graficos.
+#
+# Porque e' separado da WATCHLIST: os dois sistemas escalam ao contrario um do
+# outro. O sistema de noticias precisa de pesquisa profunda por empresa, feita
+# por um agente Claude todos os dias uteis -- 40 empresas seria 5x o trabalho
+# e o custo diario. O sistema de padroes nao usa noticias nenhumas (e'
+# puramente geometrico) e o que lhe falta e' precisamente VOLUME DE DADOS: com
+# 8 tickers a matriz de transicoes ficava a 1.69 observacoes por celula, perto
+# de nada. Alargar aqui custa so' chamadas ao yfinance e CPU, zero uso de
+# Claude.
+#
+# Estes tickers entram na tabela watchlist com active=0: existem para a
+# deteccao de padroes, mas nao sao transaccionados nem avaliados em noticias.
+PATTERN_ONLY = [
+    # Technology
+    {"ticker": "AVGO", "name": "Broadcom Inc.", "sector": "Technology"},
+    {"ticker": "ORCL", "name": "Oracle Corp.", "sector": "Technology"},
+    {"ticker": "CRM", "name": "Salesforce Inc.", "sector": "Technology"},
+    {"ticker": "AMD", "name": "Advanced Micro Devices", "sector": "Technology"},
+    {"ticker": "INTC", "name": "Intel Corp.", "sector": "Technology"},
+    {"ticker": "CSCO", "name": "Cisco Systems Inc.", "sector": "Technology"},
+    {"ticker": "ADBE", "name": "Adobe Inc.", "sector": "Technology"},
+    {"ticker": "QCOM", "name": "Qualcomm Inc.", "sector": "Technology"},
+    {"ticker": "TXN", "name": "Texas Instruments", "sector": "Technology"},
+    # Communication Services
+    {"ticker": "META", "name": "Meta Platforms Inc.", "sector": "Communication Services"},
+    {"ticker": "NFLX", "name": "Netflix Inc.", "sector": "Communication Services"},
+    {"ticker": "DIS", "name": "Walt Disney Co.", "sector": "Communication Services"},
+    # Consumer Discretionary
+    {"ticker": "TSLA", "name": "Tesla Inc.", "sector": "Consumer Discretionary"},
+    {"ticker": "HD", "name": "Home Depot Inc.", "sector": "Consumer Discretionary"},
+    {"ticker": "MCD", "name": "McDonald's Corp.", "sector": "Consumer Discretionary"},
+    {"ticker": "NKE", "name": "Nike Inc.", "sector": "Consumer Discretionary"},
+    # Consumer Staples
+    {"ticker": "WMT", "name": "Walmart Inc.", "sector": "Consumer Staples"},
+    {"ticker": "PG", "name": "Procter & Gamble Co.", "sector": "Consumer Staples"},
+    {"ticker": "KO", "name": "Coca-Cola Co.", "sector": "Consumer Staples"},
+    {"ticker": "PEP", "name": "PepsiCo Inc.", "sector": "Consumer Staples"},
+    {"ticker": "COST", "name": "Costco Wholesale Corp.", "sector": "Consumer Staples"},
+    # Financials
+    {"ticker": "BAC", "name": "Bank of America Corp.", "sector": "Financials"},
+    {"ticker": "WFC", "name": "Wells Fargo & Co.", "sector": "Financials"},
+    {"ticker": "GS", "name": "Goldman Sachs Group", "sector": "Financials"},
+    {"ticker": "MS", "name": "Morgan Stanley", "sector": "Financials"},
+    {"ticker": "V", "name": "Visa Inc.", "sector": "Financials"},
+    # Healthcare
+    {"ticker": "UNH", "name": "UnitedHealth Group", "sector": "Healthcare"},
+    {"ticker": "LLY", "name": "Eli Lilly & Co.", "sector": "Healthcare"},
+    {"ticker": "PFE", "name": "Pfizer Inc.", "sector": "Healthcare"},
+    {"ticker": "ABBV", "name": "AbbVie Inc.", "sector": "Healthcare"},
+    {"ticker": "MRK", "name": "Merck & Co.", "sector": "Healthcare"},
+    # Energy / Industrials
+    {"ticker": "CVX", "name": "Chevron Corp.", "sector": "Energy"},
+    {"ticker": "COP", "name": "ConocoPhillips", "sector": "Energy"},
+    {"ticker": "CAT", "name": "Caterpillar Inc.", "sector": "Industrials"},
+    {"ticker": "BA", "name": "Boeing Co.", "sector": "Industrials"},
+]
+
+# Tudo o que existe na tabela watchlist (os 8 transaccionados + os restantes).
+ALL_INSTRUMENTS = WATCHLIST + PATTERN_ONLY
+PATTERN_TICKERS = [w["ticker"] for w in ALL_INSTRUMENTS]
+
 CURRENCY_SYMBOL = "$"
 
 # Perguntas booleanas diárias que a tarefa agendada (Claude) responde por ticker.

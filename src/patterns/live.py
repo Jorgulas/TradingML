@@ -145,7 +145,7 @@ if __name__ == "__main__":
     import time
 
     connection = database.get_connection()
-    for tk in config.TICKERS[:3]:
+    for tk in config.PATTERN_TICKERS[:3]:
         t0 = time.time()
         result = analyse(connection, tk)
         elapsed = (time.time() - t0) * 1000

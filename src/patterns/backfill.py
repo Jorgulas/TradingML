@@ -17,7 +17,7 @@ from src.patterns.ingest_intraday import load_bars
 
 
 def backfill_timeframe(conn, timeframe: str, tickers=None) -> Counter:
-    tickers = tickers or config.TICKERS
+    tickers = tickers or config.PATTERN_TICKERS
     pivot_window = config.PATTERN_TIMEFRAMES[timeframe]["pivot_window"]
     tally = Counter()
     for ticker in tickers:

@@ -182,9 +182,15 @@ def api_signals():
 
 @app.route("/patterns")
 def patterns_page():
+    # Universo alargado: a analise de padroes cobre os 40 instrumentos, nao
+    # so' os 8 transaccionados (ver config.PATTERN_ONLY).
+    traded = set(config.TICKERS)
     return render_template(
         "patterns.html",
-        tickers=config.TICKERS,
+        instruments=[
+            {"ticker": w["ticker"], "sector": w["sector"], "traded": w["ticker"] in traded}
+            for w in config.ALL_INSTRUMENTS
+        ],
         timeframes=list(config.PATTERN_TIMEFRAMES),
         default_timeframe=config.PATTERN_LIVE_TIMEFRAME,
         pattern_types=config.PATTERN_TYPES,
@@ -194,7 +200,7 @@ def patterns_page():
 @app.route("/api/patterns/<ticker>")
 def api_patterns(ticker):
     ticker = ticker.upper()
-    if ticker not in config.TICKERS:
+    if ticker not in config.PATTERN_TICKERS:
         return jsonify({"error": f"ticker desconhecido: {ticker}"}), 404
     timeframe = request.args.get("timeframe", config.PATTERN_LIVE_TIMEFRAME)
     if timeframe not in config.PATTERN_TIMEFRAMES:
@@ -207,7 +213,7 @@ def api_pattern_bars(ticker):
     """Barras recentes para desenhar o grafico (so' o necessario, nao o
     historico todo -- a pagina refresca de poucos em poucos segundos)."""
     ticker = ticker.upper()
-    if ticker not in config.TICKERS:
+    if ticker not in config.PATTERN_TICKERS:
         return jsonify({"error": f"ticker desconhecido: {ticker}"}), 404
     timeframe = request.args.get("timeframe", config.PATTERN_LIVE_TIMEFRAME)
     if timeframe not in config.PATTERN_TIMEFRAMES:

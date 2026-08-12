@@ -74,7 +74,7 @@ def load_bars(conn, ticker: str, timeframe: str, limit: int = None) -> pd.DataFr
 
 def ingest_all(conn, timeframes=None, tickers=None) -> dict:
     timeframes = timeframes or list(config.PATTERN_TIMEFRAMES)
-    tickers = tickers or config.TICKERS
+    tickers = tickers or config.PATTERN_TICKERS
     results = {}
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for timeframe in timeframes:

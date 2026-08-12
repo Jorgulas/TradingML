@@ -35,13 +35,25 @@ def _init_schema(conn: sqlite3.Connection) -> None:
 
 
 def seed_watchlist(conn: sqlite3.Connection) -> None:
+    """Semeia todos os instrumentos conhecidos.
+
+    `active` distingue os dois universos: active=1 sao os tickers
+    transaccionados nas carteiras simuladas e avaliados em noticias todos os
+    dias (config.WATCHLIST); active=0 existem apenas para o subsistema de
+    padroes ter volume de dados suficiente para treinar a matriz de
+    transicoes. E' derivado da config a cada arranque, e nao preservado da BD,
+    para que mover um ticker entre os dois universos seja so' editar o
+    config.py."""
     now = datetime.now(timezone.utc).isoformat()
-    for item in config.WATCHLIST:
+    traded = set(config.TICKERS)
+    for item in config.ALL_INSTRUMENTS:
         conn.execute(
             """INSERT INTO watchlist (ticker, name, sector, active, added_date)
-               VALUES (?, ?, ?, 1, ?)
-               ON CONFLICT(ticker) DO UPDATE SET name = excluded.name, sector = excluded.sector""",
-            (item["ticker"], item["name"], item["sector"], now),
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(ticker) DO UPDATE SET
+                 name = excluded.name, sector = excluded.sector, active = excluded.active""",
+            (item["ticker"], item["name"], item["sector"],
+             1 if item["ticker"] in traded else 0, now),
         )
     conn.commit()
 

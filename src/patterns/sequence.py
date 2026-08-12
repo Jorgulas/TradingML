@@ -78,7 +78,7 @@ def build_transitions(conn, timeframe: str, tickers=None) -> dict:
     Os contadores sao depois somados entre tickers (assume-se que a dinamica
     padrao-a-padrao e' partilhada; com 8 tickers, treinar uma matriz por
     ticker deixaria cada celula sem observacoes nenhumas)."""
-    tickers = tickers or config.TICKERS
+    tickers = tickers or config.PATTERN_TICKERS
     counts = defaultdict(int)
     gaps = defaultdict(list)
 
@@ -243,7 +243,7 @@ def evaluate(conn, timeframe: str, train_fraction: float = 0.7) -> dict:
     Markov contra o baseline de prever sempre o padrao globalmente mais
     frequente (que ignora completamente o padrao actual)."""
     train_pairs, test_pairs = [], []
-    for ticker in config.TICKERS:
+    for ticker in config.PATTERN_TICKERS:
         rows = conn.execute(
             """SELECT pattern_type FROM detected_patterns
                WHERE ticker = ? AND timeframe = ? ORDER BY confirmed_ts, end_idx""",
