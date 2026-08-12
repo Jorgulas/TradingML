@@ -185,12 +185,18 @@ def _median_bars_fallback(transitions: dict, timeframe: str) -> float:
 # --------------------------------------------------------------------------
 
 def forecast_chain(transitions: dict, from_pattern: str, steps: int = None,
-                   beam_width: int = None, timeframe: str = "5m") -> tuple:
+                   beam_width: int = None, timeframe: str = "5m",
+                   step1_distribution: list = None) -> tuple:
     """Devolve (melhor_caminho, alternativas).
 
     Cada caminho e' uma lista de ForecastStep. O passo i+1 e' condicionado no
     padrao previsto no passo i -- e' isto que faz da previsao uma cadeia e nao
-    quatro previsoes independentes."""
+    quatro previsoes independentes.
+
+    `step1_distribution` permite substituir SO' o primeiro passo por uma
+    distribuicao vinda de fora (o classificador contextual). Nunca se aplica
+    aos passos seguintes: esses partem de um padrao previsto, que ainda nao
+    existe e portanto nao tem contexto medido nenhum."""
     steps = steps or S["horizon_steps"]
     beam_width = beam_width or S["beam_width"]
     fallback_bars = _median_bars_fallback(transitions, timeframe)
@@ -201,7 +207,18 @@ def forecast_chain(transitions: dict, from_pattern: str, steps: int = None,
     for step in range(1, steps + 1):
         expanded = []
         for cumulative, last_pattern, path in beams:
-            distribution = transition_distribution(transitions, last_pattern)
+            if step == 1 and step1_distribution:
+                # A duracao esperada continua a vir das contagens de Markov: o
+                # classificador preve QUE padrao vem a seguir, nao quando.
+                bars_by_pattern = {
+                    p: median for p, _, _, median in transition_distribution(transitions, last_pattern)
+                }
+                distribution = [
+                    (p, prob, transitions.get((last_pattern, p), {}).get("count", 0), bars_by_pattern.get(p))
+                    for p, prob in step1_distribution
+                ]
+            else:
+                distribution = transition_distribution(transitions, last_pattern)
             for to_pattern, probability, support, median_bars in distribution:
                 # Excluir explicitamente o proprio padrao escolhido: com
                 # probabilidades empatadas, a ordem da distribuicao e a do

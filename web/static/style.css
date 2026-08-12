@@ -60,6 +60,7 @@ h1 { margin: 0; font-size: 1.3rem; }
 .health-strip .warn { color: var(--amber); }
 .health-strip .err { color: var(--red); }
 .health-strip .ok { color: var(--green); }
+.health-strip .dim { color: var(--text-dim); opacity: 0.8; }
 
 main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 60px; }
 

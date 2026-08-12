@@ -234,4 +234,25 @@ PATTERN_SEQUENCE = {
     # estimativa condicional e na marginal. Ver src/patterns/sequence.py.
     "backoff_k": 10,
     "min_support": 3,         # abaixo de N observacoes, marcar como low-confidence
+
+    # Usar o classificador contextual (src/patterns/classifier.py) no passo 1
+    # da cadeia, em vez da cadeia de Markov?
+    #
+    # DESLIGADO com base em medicao, nao por preguica. Protocolo de 3
+    # particoes (60/20/20, algoritmo e peso escolhidos na validacao, teste
+    # intocado ate' ao fim), com 26 features incluindo qualidade da deteccao,
+    # duracao, amplitude, volume, volatilidade previa e posicao na sessao:
+    #
+    #   1h: classificador 32.3% vs Markov 32.0%  (+0.3pp, erro-padrao 1.77pp)
+    #   5m: classificador 14.9% vs Markov 16.0%  (-1.0pp, erro-padrao 1.81pp)
+    #
+    # Ambos dentro do ruido. O modelo ATRIBUI peso real ao contexto (48% da
+    # massa dos coeficientes, com range_pct a ser o maior de todos), mas isso
+    # nao se traduz em acertar mais -- o contexto e' preditivo de alguma
+    # coisa, so' nao do TIPO do proximo padrao. Ligar isto so' acrescentaria
+    # um artefacto joblib, uma cache e mais um modo de falha por zero ganho.
+    #
+    # Voltar a por a True quando houver bastante mais historico acumulado e o
+    # `py src/patterns/classifier.py` mostrar um ganho acima de 2 erros-padrao.
+    "use_classifier": False,
 }

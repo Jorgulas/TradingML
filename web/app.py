@@ -246,6 +246,17 @@ def api_pattern_model():
             "SELECT COUNT(*) FROM detected_patterns WHERE timeframe = ?", (timeframe,)
         ).fetchone()[0]
         metrics = sequence.evaluate(conn, timeframe)
+
+        # Comparacao classificador contextual vs cadeia de Markov, medida no
+        # conjunto de teste do protocolo de 3 particoes.
+        row = conn.execute(
+            """SELECT algorithm, accuracy, markov_accuracy, baseline_frequency_accuracy,
+                      top3_accuracy, markov_top3_accuracy, standard_error, n_test, trained_at
+               FROM pattern_model_versions WHERE timeframe = ?
+               ORDER BY trained_at DESC LIMIT 1""",
+            (timeframe,),
+        ).fetchone()
+
         out[timeframe] = {
             "n_patterns": n_patterns,
             "n_transition_cells": len(transitions),
@@ -254,6 +265,8 @@ def api_pattern_model():
             "baseline_frequency_accuracy": metrics.get("baseline_frequency_accuracy"),
             "baseline_pattern": metrics.get("baseline_pattern"),
             "n_test": metrics.get("n_test"),
+            "classifier": dict(row) if row else None,
+            "classifier_in_use": config.PATTERN_SEQUENCE.get("use_classifier", False),
         }
     return jsonify(out)
 

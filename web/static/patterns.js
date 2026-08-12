@@ -180,10 +180,23 @@ async function renderModelStrip() {
       const markov = m.markov_top1_accuracy * 100;
       const baseline = m.baseline_frequency_accuracy * 100;
       const beats = markov > baseline;
-      return `<span class="${beats ? "ok" : "warn"}">${tf}: ${m.n_patterns} padroes &middot; `
+      let text = `<span class="${beats ? "ok" : "warn"}">${tf}: ${m.n_patterns} padroes &middot; `
         + `cadeia ${markov.toFixed(1)}% vs baseline ${baseline.toFixed(1)}% `
         + `(${beats ? "+" : ""}${(markov - baseline).toFixed(1)}pp) &middot; `
         + `matriz ${m.n_transition_cells}/${m.total_cells}</span>`;
+
+      // Resultado da experiencia do classificador contextual, medido no
+      // conjunto de teste que nunca foi usado para escolher nada.
+      const c = m.classifier;
+      if (c) {
+        const delta = (c.accuracy - c.markov_accuracy) * 100;
+        const se = c.standard_error * 100;
+        const significant = Math.abs(delta) > 2 * se;
+        text += ` <span class="${significant ? "ok" : "dim"}">| classificador ${(c.accuracy * 100).toFixed(1)}% `
+          + `(${delta >= 0 ? "+" : ""}${delta.toFixed(1)}pp, &plusmn;${se.toFixed(1)}pp) `
+          + `${significant ? "" : "&mdash; dentro do ruido, nao usado"}</span>`;
+      }
+      return text;
     }).join(" ");
   } catch (err) {
     el.innerHTML = `<span class="err">falha a carregar estado do modelo: ${err.message}</span>`;

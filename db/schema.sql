@@ -240,6 +240,35 @@ CREATE TABLE IF NOT EXISTS pattern_forecasts (
     UNIQUE (ticker, timeframe, as_of_ts, step)
 );
 
+-- Classificador multiclasse contextual (passo 1 da cadeia de previsao).
+-- Tabela separada de model_versions porque essa tem CHECK(horizon IN
+-- ('SHORT','LONG')), que pertence ao outro subsistema.
+-- Todas as accuracy aqui sao medidas no conjunto de TESTE, que nunca e' usado
+-- para escolher nada (nem algoritmo nem peso do ensemble -- isso decide-se na
+-- particao de validacao). Sem esta separacao os numeros ficam optimistas: com
+-- split a dois, o ensemble a 5m aparentava +2.9pp que se revelaram +0.3pp.
+CREATE TABLE IF NOT EXISTS pattern_model_versions (
+    version                      TEXT PRIMARY KEY,
+    timeframe                    TEXT NOT NULL,
+    algorithm                    TEXT NOT NULL,
+    trained_at                   TEXT NOT NULL,
+    n_train                      INTEGER NOT NULL,
+    n_validation                 INTEGER NOT NULL,
+    n_test                       INTEGER NOT NULL,
+    n_features                   INTEGER NOT NULL,
+    accuracy                     REAL,
+    top3_accuracy                REAL,
+    markov_accuracy              REAL,
+    markov_top3_accuracy         REAL,
+    baseline_frequency_accuracy  REAL,
+    ensemble_weight              REAL,
+    ensemble_accuracy            REAL,
+    standard_error               REAL,
+    hyperparams_json             TEXT,
+    feature_names_json           TEXT,
+    notes                        TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_tf ON intraday_prices(ticker, timeframe, ts);
 CREATE INDEX IF NOT EXISTS idx_patterns_ticker_tf ON detected_patterns(ticker, timeframe, confirmed_ts);
 CREATE INDEX IF NOT EXISTS idx_forecasts_lookup ON pattern_forecasts(ticker, timeframe, as_of_ts);

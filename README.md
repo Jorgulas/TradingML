@@ -196,25 +196,58 @@ de meia dúzia (`BULL_FLAG → BEAR_FLAG` tem agora n=296, antes n=8). Continua 
 ser uma vantagem modesta — o passo seguinte é usar as features já calculadas
 (ver abaixo), que só agora tem dados que o justifiquem.
 
-### O que ainda não é usado (próximo passo óbvio)
+### O classificador multiclasse contextual — experiência feita, resultado negativo
 
-O modelo de sequência consome **uma única feature**: a identidade do padrão
-atual. O `SELECT` é literalmente `SELECT pattern_type, end_idx FROM
-detected_patterns`.
+Foi construído (`src/patterns/classifier.py` + `context.py`) e **medido**: um
+classificador de 16 classes com 26 features — identidade do padrão em one-hot
+mais qualidade da deteção, duração, amplitude, retorno do padrão, tendência
+prévia a 20 e 60 barras, volatilidade prévia, rácio de volume, nº de pivots e
+posição na sessão. Isto usa o volume, que até aí era ingerido e ignorado.
 
-Tudo isto é calculado, guardado em `detected_patterns.meta_json`, mostrado na
-interface — e **ignorado pelo modelo**: `quality` da deteção, declives das
-trendlines, R², `pole_move`, `level_diff`, `excursion`, `n_pivots`. Nunca é
-sequer calculado: volume durante o padrão (é ingerido e não usado), hora da
-sessão, regime de volatilidade, posição face à tendência longa.
+**Onde entraria na cadeia, e porque não em todo o lado:** só no **passo 1**. O
+padrão atual já se formou, logo a sua qualidade e volume são factos medidos.
+Nos passos 2–4 o padrão de partida é um padrão *previsto que ainda não
+existe* — não tem qualidade nem volume. Atribuir-lhe valores "típicos" daria
+números com ar mais informado sem informação nova nenhuma por trás. A cadeia de
+Markov é exactamente a versão marginalizada sobre esse contexto, que é o que se
+deve usar quando o contexto é desconhecido.
 
-Com 8 tickers isso era uma escolha forçada — cada feature extra multiplica o
-espaço de estados e com 201 exemplos de treino só agravaria o overfitting. Com
-43 tickers (1.279–2.354 exemplos) já há margem para substituir a contagem por
-um **classificador multiclasse real** (16 classes): entrada = padrão atual em
-one-hot + quality + declives + regime + hora da sessão, saída = distribuição
-sobre o padrão seguinte. A cadeia de 4 passos continua a funcionar por cima
-sem alterações.
+**Protocolo:** três partições cronológicas por ticker (60% treino, 20%
+validação, 20% teste). O algoritmo e o peso do ensemble escolhem-se na
+**validação**; o teste só é tocado para reportar.
+
+| | 1h | 5m |
+|---|---|---|
+| Classificador | 32,3% | 14,9% |
+| Cadeia de Markov | 32,0% | **16,0%** |
+| Ensemble (peso da validação) | 32,0% | 16,2% |
+| Baseline frequência | 30,3% | 13,9% |
+| **Diferença vs Markov** | **+0,3 pp** | **−1,0 pp** |
+| Erro-padrão | ±1,77 pp | ±1,81 pp |
+
+**Ambos dentro do ruído. O contexto não ajuda a prever o tipo do próximo
+padrão.** Por isso `PATTERN_SEQUENCE["use_classifier"]` está a `False` e a
+produção continua na cadeia de Markov — a flag existe e funciona, é só voltar a
+ligá-la quando a medição justificar.
+
+Três coisas que valeu a pena descobrir pelo caminho:
+
+- **A regressão logística deu 4,9%, abaixo do acaso (1/16 = 6,25%).** Bug meu:
+  `class_weight="balanced"` com 16 classes muito desequilibradas amplifica
+  ~100× as raras e o modelo passa a prevê-las quase sempre. Balancear serve
+  para recall em minorias; aqui a métrica é accuracy.
+- **O split a duas partições mentia.** Com o peso do ensemble escolhido no
+  próprio teste, o ganho a 5m parecia **+2,9 pp**; com validação separada,
+  sobraram **+0,3 pp**. Na validação o ensemble chegou a 23,4% e no teste
+  intocado deu 16,2% — é assim que o *test-set tuning* se manifesta.
+- **O modelo usa mesmo o contexto — 48% da massa dos coeficientes**, com
+  `range_pct` a ser o maior coeficiente de todos, acima de qualquer feature de
+  identidade. Ou seja: o contexto é preditivo de *alguma coisa*, só não do
+  **tipo** do próximo padrão.
+
+O `run_patterns.py` retreina e remede isto todos os dias, e o veredicto aparece
+na faixa de topo da página `/patterns`. Quando o histórico acumulado tornar o
+ganho superior a 2 erros-padrão, é uma flag a mudar.
 
 ## Testes
 
@@ -250,6 +283,8 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
   detectors.py          geometria dos 16 padroes, cada um com quality score
   scanner.py            varre o historico, resolve sobreposicoes, sequencia limpa
   sequence.py           cadeia de Markov + beam search 4 passos + avaliacao
+  context.py            features de contexto por padrao (para o classificador)
+  classifier.py         classificador multiclasse + protocolo de 3 particoes
   live.py               deteccao + previsao em tempo real (<100ms, matriz em cache)
   backfill.py           redeteccao completa do historico
   run_patterns.py       ciclo completo, corre a seguir ao pipeline diario

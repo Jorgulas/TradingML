@@ -71,8 +71,25 @@ def analyse(conn, ticker: str, timeframe: str = None, steps: int = None) -> dict
 
     current = matches[-1]
     transitions = get_transitions(conn, timeframe)
+
+    # Passo 1 pelo classificador contextual, se estiver ligado. Por omissao
+    # nao esta': medido, nao bate a cadeia de Markov (ver a nota em
+    # config.PATTERN_SEQUENCE["use_classifier"]).
+    step1_distribution, step1_source = None, "markov"
+    if config.PATTERN_SEQUENCE.get("use_classifier"):
+        from src.patterns import classifier, context as pattern_context
+
+        features = pattern_context.pattern_context_features(
+            bars, current.start_idx, current.end_idx,
+            current.pattern_type, current.quality, current.n_pivots,
+        )
+        step1_distribution = classifier.predict_distribution(timeframe, features)
+        if step1_distribution:
+            step1_source = "classifier"
+
     best, alternatives = sequence.forecast_chain(
-        transitions, current.pattern_type, steps=steps, timeframe=timeframe
+        transitions, current.pattern_type, steps=steps, timeframe=timeframe,
+        step1_distribution=step1_distribution,
     )
 
     def serialise(chain):
@@ -109,6 +126,7 @@ def analyse(conn, ticker: str, timeframe: str = None, steps: int = None) -> dict
         "recent_patterns": recent,
         "forecast": serialise(best),
         "alternatives": [serialise(alt) for alt in alternatives[:3]],
+        "step1_source": step1_source,
     }
 
 
