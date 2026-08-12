@@ -1,0 +1,137 @@
+:root {
+  --bg: #0f1420;
+  --bg-panel: #161d2e;
+  --bg-card: #1b2338;
+  --border: #2a3450;
+  --text: #e6e9f2;
+  --text-dim: #8f9bb8;
+  --green: #3ddc97;
+  --red: #ff6b6b;
+  --amber: #f5b64c;
+  --blue: #5b9dff;
+  --purple: #b98cff;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.4;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-left { display: flex; align-items: baseline; gap: 12px; }
+h1 { margin: 0; font-size: 1.3rem; }
+
+.sim-badge {
+  background: rgba(245, 182, 76, 0.15);
+  color: var(--amber);
+  border: 1px solid rgba(245, 182, 76, 0.4);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.header-right { color: var(--text-dim); font-size: 0.85rem; }
+
+.health-strip {
+  padding: 8px 24px;
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.health-strip .warn { color: var(--amber); }
+.health-strip .err { color: var(--red); }
+.health-strip .ok { color: var(--green); }
+
+main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 60px; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.card h3 { margin: 0 0 4px; font-size: 0.95rem; color: var(--text-dim); font-weight: 600; }
+.card .total-value { font-size: 1.9rem; font-weight: 700; margin: 4px 0; }
+.card .pnl { font-size: 1.05rem; font-weight: 600; }
+.card .pnl.positive { color: var(--green); }
+.card .pnl.negative { color: var(--red); }
+.card .meta { color: var(--text-dim); font-size: 0.82rem; margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap; }
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+.panel h2 { margin: 0 0 14px; font-size: 1.05rem; }
+
+.positions-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.positions-panels > div:not(:first-child) h2 { margin-top: 0; }
+@media (max-width: 760px) { .positions-panels { grid-template-columns: 1fr; } }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--text-dim); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+tbody tr:hover { background: rgba(255,255,255,0.03); }
+td.positive { color: var(--green); }
+td.negative { color: var(--red); }
+td.empty-row { color: var(--text-dim); font-style: italic; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.badge.up { background: rgba(61, 220, 151, 0.15); color: var(--green); }
+.badge.down { background: rgba(255, 107, 107, 0.15); color: var(--red); }
+.badge.none { background: rgba(143, 155, 184, 0.15); color: var(--text-dim); }
+.badge.buy { background: rgba(91, 157, 255, 0.15); color: var(--blue); }
+.badge.sell { background: rgba(255, 107, 107, 0.15); color: var(--red); }
+.badge.short { background: rgba(91, 157, 255, 0.15); color: var(--blue); }
+.badge.long { background: rgba(185, 140, 255, 0.15); color: var(--purple); }
+
+.signal-cell { display: flex; align-items: center; gap: 6px; }
+.confidence { color: var(--text-dim); font-size: 0.8rem; }
+
+.chip-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(143, 155, 184, 0.12);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.chip.active { background: rgba(61, 220, 151, 0.18); color: var(--green); }
+
+footer {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+}

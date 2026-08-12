@@ -1,0 +1,13 @@
+data/tradingml.db
+data/tradingml.db-wal
+data/tradingml.db-shm
+data/incoming/*.json
+data/incoming/archive/*.json
+data/models/*.joblib
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.claude/settings.local.json
+.claude/*.lock

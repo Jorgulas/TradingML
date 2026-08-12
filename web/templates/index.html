@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradingML -- Simulacao</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>TradingML</h1>
+    <span class="sim-badge">SIMULACAO -- sem dinheiro real</span>
+  </div>
+  <div class="header-right" id="header-updated">a carregar...</div>
+</header>
+
+<section class="health-strip" id="health-strip">a carregar estado do sistema...</section>
+
+<main>
+  <section class="cards" id="summary-cards">
+    <!-- preenchido por dashboard.js -->
+  </section>
+
+  <section class="panel">
+    <h2>Equity curve</h2>
+    <canvas id="equity-chart" height="90"></canvas>
+  </section>
+
+  <section class="panel">
+    <h2>Sinal de hoje</h2>
+    <div class="table-wrap">
+      <table id="signals-table">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Curto Prazo</th>
+            <th>Longo Prazo</th>
+            <th>Noticias (hoje)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel positions-panels">
+    <div>
+      <h2>Posicoes -- Curto Prazo</h2>
+      <div class="table-wrap"><table class="positions-table" data-horizon="SHORT">
+        <thead><tr><th>Ticker</th><th>Qtd</th><th>Preco medio</th><th>Preco atual</th><th>P&amp;L n&atilde;o realizado</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+    <div>
+      <h2>Posicoes -- Longo Prazo</h2>
+      <div class="table-wrap"><table class="positions-table" data-horizon="LONG">
+        <thead><tr><th>Ticker</th><th>Qtd</th><th>Preco medio</th><th>Preco atual</th><th>P&amp;L n&atilde;o realizado</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Trades recentes</h2>
+    <div class="table-wrap">
+      <table id="trades-table">
+        <thead>
+          <tr><th>Data</th><th>Horizonte</th><th>Ticker</th><th>Lado</th><th>Qtd</th><th>Preco</th><th>Motivo</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Simulacao educativa (paper trading). Precos via Yahoo Finance, sem comissoes/slippage. Nao e' aconselhamento financeiro.
+</footer>
+
+<script>
+  window.APP_CONFIG = {
+    currencySymbol: {{ currency_symbol | tojson }},
+    horizons: {{ horizons | tojson }},
+    tickers: {{ tickers | tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>
