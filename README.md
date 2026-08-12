@@ -108,10 +108,21 @@ web/                    dashboard Flask (so-leitura)
 tests/                  pytest
 ```
 
-## Tarefa agendada (automação diária real)
+## Tarefa agendada (automação diária real) — ATIVA
 
-Ainda não está ativa. Quando quiseres ligar a recorrência automática (que
-passa a consumir uso do Claude todos os dias úteis), pede para a configurar
-via `/schedule` -- o prompt vai: pesquisar noticias recentes por ticker ->
-escrever `data/incoming/<data>.json` -> `record_daily_features.py --file ...`
--> `run_daily.py` -> resumo pass/fail.
+Duas peças, porque a rotina cloud não tem acesso a este PC/BD local:
+
+1. **Rotina cloud** (`TradingML - avaliacao diaria de noticias`,
+   https://claude.ai/code/routines/trig_01BFYXPMEX3E7nbT2RRUM5Cy) — dias
+   úteis às 21:30 UTC (depois do fecho de Wall Street + after-hours). Lê
+   `config.py` do repositório, pesquisa notícias por ticker, escreve
+   `data/incoming/<data>.json` e faz commit+push só desse ficheiro para
+   `Jorgulas/TradingML`. Gerível em https://claude.ai/code/routines.
+2. **Tarefa local** (`TradingML Daily Sync`, Agendador de Tarefas do
+   Windows) — dias úteis às 08:30 hora local. Corre `scripts/local_daily_sync.py`:
+   `git pull` → ingere o JSON do dia se já lá estiver → corre `run_daily.py`
+   sempre (booleanos ficam neutros se as notícias ainda não tiverem chegado).
+   Só corre com sessão Windows iniciada (não guarda a password do Windows).
+
+Para veres o estado: `Get-ScheduledTask -TaskName "TradingML Daily Sync"` no
+PowerShell, ou o painel de estado do sistema no topo do dashboard.
