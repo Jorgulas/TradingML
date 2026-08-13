@@ -53,6 +53,9 @@ def main():
             print(f"    Markov top-1:      {metrics['markov_top1_accuracy']:.1%}")
             print(f"    baseline frequencia: {metrics['baseline_frequency_accuracy']:.1%} "
                   f"(prever sempre {metrics['baseline_pattern']})")
+            print(f"    lift: {metrics['lift']*100:+.2f}pp +-{metrics['standard_error']*100:.2f}pp  "
+                  f"kappa={metrics['kappa']:+.4f}  -> "
+                  f"{'SIGNIFICATIVO' if metrics['significant'] else 'dentro do ruido'}")
         database.log_run(conn, today, f"pattern_backfill_{timeframe}", "OK",
                           f"patterns={total} transitions={len(transitions)}")
 

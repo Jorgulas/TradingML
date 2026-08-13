@@ -84,6 +84,29 @@ def _evidence(*groups) -> float:
     return min(total, 6) / 6
 
 
+def _raw_fit(xs, ys):
+    """Ajuste em unidades de preco (nao normalizado), para calcular larguras
+    entre as duas fronteiras. `_fit_line` normaliza o declive pelo preco medio
+    do SEU grupo, e topos e fundos tem medias diferentes -- misturar os dois
+    ao calcular larguras da resultados sem sentido dimensional."""
+    xs = np.asarray(xs, dtype=float)
+    ys = np.asarray(ys, dtype=float)
+    if len(xs) < 2:
+        return 0.0, float(ys[0]) if len(ys) else 0.0
+    slope, intercept = np.polyfit(xs, ys, 1)
+    return float(slope), float(intercept)
+
+
+def _boundary_widths(highs, lows, x_start: float, x_end: float):
+    """Distancia entre a trendline de cima e a de baixo, no inicio e no fim.
+    A convergir -> triangulo/cunha. A divergir -> broadening."""
+    slope_h, intercept_h = _raw_fit([p.idx for p in highs], [p.price for p in highs])
+    slope_l, intercept_l = _raw_fit([p.idx for p in lows], [p.price for p in lows])
+    width_start = (slope_h * x_start + intercept_h) - (slope_l * x_start + intercept_l)
+    width_end = (slope_h * x_end + intercept_h) - (slope_l * x_end + intercept_l)
+    return width_start, width_end
+
+
 def _spread(values) -> float:
     """Dispersao relativa de um conjunto de niveis (0 = perfeitamente iguais)."""
     values = np.asarray(values, dtype=float)
@@ -165,11 +188,7 @@ def detect_triangle_or_rectangle(pivots, bars):
         return _base(pivots, kind, quality, {**meta, "prior_trend": trend})
 
     # Triangulos: fronteiras tem de convergir (largura a fechar)
-    x0, x1 = pivots[0].idx, pivots[-1].idx
-    width_start = (slope_h * x0 + int_h / max(np.mean([p.price for p in pivots]), 1e-9)) - \
-                  (slope_l * x0 + int_l / max(np.mean([p.price for p in pivots]), 1e-9))
-    width_end = (slope_h * x1 + int_h / max(np.mean([p.price for p in pivots]), 1e-9)) - \
-                (slope_l * x1 + int_l / max(np.mean([p.price for p in pivots]), 1e-9))
+    width_start, width_end = _boundary_widths(highs, lows, pivots[0].idx, pivots[-1].idx)
     converging = width_end < width_start
 
     if _is_flat(slope_h) and _is_rising(slope_l) and converging:
@@ -180,6 +199,82 @@ def detect_triangle_or_rectangle(pivots, bars):
         symmetry = 1 - abs(abs(slope_h) - abs(slope_l)) / max(abs(slope_h) + abs(slope_l), 1e-9)
         return _base(pivots, "SYMMETRICAL_TRIANGLE", 0.5 * fit_quality + 0.5 * symmetry * evidence, meta)
     return None
+
+
+# --------------------------------------------------------------------------
+# Cunhas: as DUAS fronteiras inclinadas no MESMO sentido, a convergir.
+# E' o que as distingue dos triangulos (uma fronteira plana ou sentidos
+# opostos) e das bandeiras (fronteiras paralelas, sem convergencia).
+# --------------------------------------------------------------------------
+
+MIN_CONVERGENCE = 0.25  # a largura tem de fechar >=25% para contar como cunha
+
+
+def detect_wedge(pivots, bars):
+    highs, lows = split_by_kind(pivots)
+    if len(highs) < 2 or len(lows) < 2 or not _span_ok(pivots):
+        return None
+
+    slope_h, _, r2_h = _fit_line([p.idx for p in highs], [p.price for p in highs])
+    slope_l, _, r2_l = _fit_line([p.idx for p in lows], [p.price for p in lows])
+    if min(r2_h, r2_l) < P["min_r2"]:
+        return None
+
+    if _is_rising(slope_h) and _is_rising(slope_l):
+        kind = "RISING_WEDGE"        # bearish: procura a esgotar-se na subida
+    elif _is_falling(slope_h) and _is_falling(slope_l):
+        kind = "FALLING_WEDGE"       # bullish: venda a esgotar-se na descida
+    else:
+        return None
+
+    width_start, width_end = _boundary_widths(highs, lows, pivots[0].idx, pivots[-1].idx)
+    if width_start <= 0:
+        return None
+    convergence = 1 - (width_end / width_start)
+    if convergence < MIN_CONVERGENCE:
+        return None  # inclinacao no mesmo sentido mas sem fechar: e' um canal
+
+    evidence = _evidence(highs, lows)
+    fit_quality = ((r2_h + r2_l) / 2) * evidence
+    quality = 0.5 * fit_quality + 0.5 * min(convergence / 0.6, 1.0) * evidence
+    meta = {"slope_high": slope_h, "slope_low": slope_l, "convergence": convergence,
+            "n_pivots": len(pivots)}
+    return _base(pivots, kind, quality, meta)
+
+
+# --------------------------------------------------------------------------
+# Broadening (megafone): o oposto do triangulo -- fronteiras a divergir.
+# --------------------------------------------------------------------------
+
+MIN_DIVERGENCE = 0.35
+
+
+def detect_broadening(pivots, bars):
+    highs, lows = split_by_kind(pivots)
+    if len(highs) < 2 or len(lows) < 2 or not _span_ok(pivots) or not _height_ok(pivots):
+        return None
+
+    slope_h, _, r2_h = _fit_line([p.idx for p in highs], [p.price for p in highs])
+    slope_l, _, r2_l = _fit_line([p.idx for p in lows], [p.price for p in lows])
+    if min(r2_h, r2_l) < P["min_r2"]:
+        return None
+    if not (_is_rising(slope_h) and _is_falling(slope_l)):
+        return None  # topos mais altos E fundos mais baixos: a abrir dos dois lados
+
+    width_start, width_end = _boundary_widths(highs, lows, pivots[0].idx, pivots[-1].idx)
+    if width_start <= 0:
+        return None
+    divergence = (width_end / width_start) - 1
+    if divergence < MIN_DIVERGENCE:
+        return None
+
+    evidence = _evidence(highs, lows)
+    quality = 0.5 * ((r2_h + r2_l) / 2) * evidence + 0.5 * min(divergence / 1.0, 1.0) * evidence
+    trend = _prior_trend(bars, pivots[0].idx)
+    kind = "BROADENING_TOP" if trend > 0 else "BROADENING_BOTTOM"
+    meta = {"slope_high": slope_h, "slope_low": slope_l, "divergence": divergence,
+            "prior_trend": trend, "n_pivots": len(pivots)}
+    return _base(pivots, kind, quality, meta)
 
 
 # --------------------------------------------------------------------------
@@ -227,9 +322,19 @@ def detect_flag_or_pennant(pivots, bars):
     if _is_falling(slope_h) and _is_rising(slope_l):
         return _base(pivots, "PENNANT", 0.5 * fit_quality + 0.5, meta)
 
-    # Flag: canal paralelo inclinado CONTRA o mastro
+    # Flag: canal PARALELO inclinado contra o mastro.
+    #
+    # A verificacao de paralelismo pelos declives sozinha nao chegava: uma
+    # cunha descendente tem os dois declives negativos e proximos um do outro,
+    # passava neste teste e era classificada como BULL_FLAG -- e como as
+    # bandeiras sao a deteccao mais comum, isso contaminava o maior estado da
+    # matriz com uma formacao de significado oposto. Exige-se agora tambem que
+    # a largura do canal se mantenha: um canal a fechar e' cunha, nao bandeira.
     parallel = abs(slope_h - slope_l) <= P["min_slope"]
     if not parallel:
+        return None
+    width_start, width_end = _boundary_widths(highs, lows, pivots[0].idx, pivots[-1].idx)
+    if width_start > 0 and (1 - width_end / width_start) >= MIN_CONVERGENCE:
         return None
     channel_slope = (slope_h + slope_l) / 2
     if direction > 0 and channel_slope <= P["flat_slope_max"]:
@@ -336,6 +441,8 @@ PIVOT_DETECTORS = [
     detect_double,
     detect_head_and_shoulders,
     detect_diamond,
+    detect_broadening,
+    detect_wedge,
     detect_flag_or_pennant,
     detect_triangle_or_rectangle,
 ]

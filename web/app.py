@@ -265,6 +265,10 @@ def api_pattern_model():
             "baseline_frequency_accuracy": metrics.get("baseline_frequency_accuracy"),
             "baseline_pattern": metrics.get("baseline_pattern"),
             "n_test": metrics.get("n_test"),
+            "lift": metrics.get("lift"),
+            "standard_error": metrics.get("standard_error"),
+            "significant": metrics.get("significant"),
+            "kappa": metrics.get("kappa"),
             "classifier": dict(row) if row else None,
             "classifier_in_use": config.PATTERN_SEQUENCE.get("use_classifier", False),
         }

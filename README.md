@@ -86,10 +86,11 @@ Independente do de cima. Em vez de prever direção do preço, **deteta padrões
 clássicos de análise técnica** e aprende **que padrão costuma seguir-se a
 qual**, prevendo os 4 seguintes em cadeia.
 
-16 padrões detetados: triângulos (ascendente/descendente/simétrico), bandeiras
+20 padrões detetados: triângulos (ascendente/descendente/simétrico), bandeiras
 (bull/bear), pennant, retângulos (topo/fundo), duplos topos/fundos, diamantes
 (topo/fundo), head & shoulders (normal/invertido), cup with handle (normal/
-invertido).
+invertido), **cunhas (ascendente/descendente)** e **broadening/megafone
+(topo/fundo)**.
 
 ### Dois universos de tickers, e porquê
 
@@ -168,33 +169,61 @@ leitura mais rica). Os outros três estão documentados em
 ### Resultado honesto da avaliação
 
 Walk-forward por ticker (70% treino / 30% teste), top-1 accuracy contra o
-baseline de "prever sempre o padrão mais frequente":
+baseline de "prever sempre o padrão mais frequente", **sempre com barra de
+erro**:
 
-| Timeframe | Cadeia de Markov | Baseline frequência | Diferença |
-|---|---|---|---|
-| 1h | 32,9% | 30,2% | **+2,7 pp** |
-| 5m | 16,8% | 16,6% | **+0,2 pp** |
+| Timeframe | Cadeia de Markov | Baseline frequência | Lift | Veredicto |
+|---|---|---|---|---|
+| 1h | 18,6% | 19,4% | −0,9 pp ±1,2 pp | dentro do ruído |
+| 5m | 16,5% | 17,2% | −0,7 pp ±1,5 pp | dentro do ruído |
 
-**A cadeia bate o baseline, mas por pouco.** Saber o padrão atual ajuda a
-prever o seguinte um bocadinho mais do que saber apenas quais são os padrões
-comuns — de forma clara a 1h, quase nada a 5m. Isto está visível
-permanentemente na faixa de topo da página `/patterns`, não escondido.
+**Conclusão honesta: saber o padrão atual não ajuda a prever o seguinte, para
+lá de saber quais são os padrões mais comuns.** Isto está permanentemente
+visível na faixa de topo da página `/patterns`, não escondido.
 
-O efeito de alargar o universo de 8 para 43 tickers está medido:
+#### Retratação de um resultado anterior
+
+Uma versão anterior deste README reportava **+2,7 pp de vantagem a 1h**. Esse
+número **inverteu de sinal** assim que o detector de cunhas foi corrigido.
+Estava dentro de ~2 erros-padrão desde o início e nunca tinha sido robusto —
+foi reportado sem barra de erro, o que é precisamente como se vende ruído como
+resultado. O `sequence.evaluate()` passou a devolver sempre `lift`,
+`standard_error`, `significant` e `kappa`, e a interface só pinta o lift a
+verde quando passa 2 erros-padrão.
+
+#### O que mediu bem e o que não mediu
+
+Alargar o universo de 8 para 43 tickers melhorou de forma real e verificável a
+**qualidade estatística da matriz**, mesmo não tendo melhorado a previsão:
 
 | | 8 tickers | 43 tickers |
 |---|---|---|
-| Padrões (1h / 5m) | 632 / 300 | 3.436 / 1.895 |
-| Observações por célula (1h / 5m) | 1,69 / 0,79 | **9,20 / 5,00** |
-| Densidade da matriz (1h) | 32,8% | **58,6%** |
-| Vantagem sobre baseline (1h) | +1,6 pp | **+2,7 pp** |
-| Vantagem sobre baseline (5m) | −2,2 pp | **+0,2 pp** |
+| Padrões (1h / 5m) | 632 / 300 | 3.472 / 1.911 |
+| Observações por célula (1h) | 1,69 | **9,20** |
+| Suporte da transição principal | n=8 | **n=296** |
 
-Mais dados melhoraram mesmo: a 5m a cadeia deixou de **perder** do baseline, e
-as transições principais passaram a assentar em centenas de observações em vez
-de meia dúzia (`BULL_FLAG → BEAR_FLAG` tem agora n=296, antes n=8). Continua a
-ser uma vantagem modesta — o passo seguinte é usar as features já calculadas
-(ver abaixo), que só agora tem dados que o justifiquem.
+#### Porque é que "mais padrões" não deu mais acerto
+
+Acrescentar cunhas e broadening foi **correcto em termos de detecção** — a
+cunha descendente estava a ser classificada como `BULL_FLAG` (um bug real: o
+teste de paralelismo por declives deixava passar canais convergentes), e a
+cunha ascendente não era detectada de todo. Juntas são 18% das formações a 1h,
+e o `BULL_FLAG` caiu de 965 para 630 quando deixaram de lhe ser atribuídas.
+
+Mas em previsão **piorou**, porque 20 tipos são 400 células de matriz em vez de
+256, com os mesmos dados. Testaram-se três alfabetos:
+
+| Alfabeto | Células | 1h kappa | 5m kappa |
+|---|---|---|---|
+| 20 estados (actual) | 400 | −0,0095 | −0,0083 |
+| 16 (cunhas fundidas nas bandeiras) | 256 | −0,0027 | −0,0041 |
+| 3 (só o viés alta/baixa/neutro) | 9 | 0,0000 | +0,0107 |
+
+**Nenhum bate o acaso.** E o alfabeto de 3 estados ilustra bem porque é que o
+acerto bruto engana: dá 46,9% de acerto a 1h — muito melhor que os 18,6% — mas
+o baseline também é 46,9%, logo kappa zero. Comparar acerto entre alfabetos de
+tamanhos diferentes não quer dizer nada; **kappa** (acerto corrigido pelo
+acaso) é o único número comparável, e é por isso que passou a ser reportado.
 
 ### O classificador multiclasse contextual — experiência feita, resultado negativo
 
@@ -216,19 +245,23 @@ deve usar quando o contexto é desconhecido.
 validação, 20% teste). O algoritmo e o peso do ensemble escolhem-se na
 **validação**; o teste só é tocado para reportar.
 
+Medido com os 20 tipos de padrão actuais:
+
 | | 1h | 5m |
 |---|---|---|
-| Classificador | 32,3% | 14,9% |
-| Cadeia de Markov | 32,0% | **16,0%** |
-| Ensemble (peso da validação) | 32,0% | 16,2% |
-| Baseline frequência | 30,3% | 13,9% |
-| **Diferença vs Markov** | **+0,3 pp** | **−1,0 pp** |
-| Erro-padrão | ±1,77 pp | ±1,81 pp |
+| Classificador | 16,8% | 14,4% |
+| Cadeia de Markov | **22,1%** | **14,6%** |
+| **Diferença vs Markov** | **−5,2 pp** | **−0,3 pp** |
+| Erro-padrão | ±1,4 pp | ±1,8 pp |
+| Veredicto | **significativamente PIOR** | dentro do ruído |
 
-**Ambos dentro do ruído. O contexto não ajuda a prever o tipo do próximo
-padrão.** Por isso `PATTERN_SEQUENCE["use_classifier"]` está a `False` e a
+**O contexto não ajuda a prever o tipo do próximo padrão** — e a 1h chega a
+prejudicar de forma estatisticamente significativa. Com 16 tipos a diferença
+era +0,3 pp (ruído); ao passar para 20, o classificador degradou-se muito mais
+que a cadeia de Markov, que tem o recuo para a marginal a protegê-la da
+esparsidão. Por isso `PATTERN_SEQUENCE["use_classifier"]` está a `False` e a
 produção continua na cadeia de Markov — a flag existe e funciona, é só voltar a
-ligá-la quando a medição justificar.
+ligá-la se a medição alguma vez justificar.
 
 Três coisas que valeu a pena descobrir pelo caminho:
 

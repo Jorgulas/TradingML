@@ -164,11 +164,13 @@ PATTERN_TYPES = [
     "PENNANT",
     "CUP_WITH_HANDLE",
     "RECTANGLE_BOTTOM",
+    "FALLING_WEDGE",
     # continuacao / bearish
     "DESCENDING_TRIANGLE",
     "BEAR_FLAG",
     "INVERSE_CUP_WITH_HANDLE",
     "RECTANGLE_TOP",
+    "RISING_WEDGE",
     # reversao
     "DOUBLE_BOTTOM",
     "DOUBLE_TOP",
@@ -176,6 +178,8 @@ PATTERN_TYPES = [
     "DIAMOND_TOP",
     "HEAD_AND_SHOULDERS_TOP",
     "INVERSE_HEAD_AND_SHOULDERS",
+    "BROADENING_TOP",
+    "BROADENING_BOTTOM",
 ]
 
 PATTERN_BIAS = {
@@ -195,6 +199,12 @@ PATTERN_BIAS = {
     "DIAMOND_TOP": "bearish",
     "HEAD_AND_SHOULDERS_TOP": "bearish",
     "INVERSE_HEAD_AND_SHOULDERS": "bullish",
+    # Cunhas: o vies e' CONTRARIO ao sentido da inclinacao -- uma cunha
+    # ascendente e' bearish (a procura enfraquece enquanto o preco ainda sobe).
+    "RISING_WEDGE": "bearish",
+    "FALLING_WEDGE": "bullish",
+    "BROADENING_TOP": "bearish",
+    "BROADENING_BOTTOM": "bullish",
 }
 
 # Parametros de deteccao geometrica. Ver README (seccao "Parametros de

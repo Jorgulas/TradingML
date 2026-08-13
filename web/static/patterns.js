@@ -179,10 +179,15 @@ async function renderModelStrip() {
       }
       const markov = m.markov_top1_accuracy * 100;
       const baseline = m.baseline_frequency_accuracy * 100;
-      const beats = markov > baseline;
-      let text = `<span class="${beats ? "ok" : "warn"}">${tf}: ${m.n_patterns} padroes &middot; `
+      const lift = (m.lift ?? 0) * 100;
+      const se = (m.standard_error ?? 0) * 100;
+      // O lift so' e' mostrado como bom quando passa 2 erros-padrao. Sem esta
+      // barra, um lift de ruido le-se como resultado.
+      const cls = m.significant ? (lift > 0 ? "ok" : "err") : "dim";
+      const verdict = m.significant ? "" : " &mdash; dentro do ruido";
+      let text = `<span class="${cls}">${tf}: ${m.n_patterns} padroes &middot; `
         + `cadeia ${markov.toFixed(1)}% vs baseline ${baseline.toFixed(1)}% `
-        + `(${beats ? "+" : ""}${(markov - baseline).toFixed(1)}pp) &middot; `
+        + `(${lift >= 0 ? "+" : ""}${lift.toFixed(1)}pp &plusmn;${se.toFixed(1)}pp${verdict}) &middot; `
         + `matriz ${m.n_transition_cells}/${m.total_cells}</span>`;
 
       // Resultado da experiencia do classificador contextual, medido no

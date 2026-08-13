@@ -291,12 +291,30 @@ def evaluate(conn, timeframe: str, train_fraction: float = 0.7) -> dict:
     )
     baseline_hits = sum(1 for _, actual in test_pairs if actual == most_common)
 
+    markov_accuracy = markov_hits / len(test_pairs)
+    baseline_accuracy = baseline_hits / len(test_pairs)
+
+    # Lift SEMPRE com barra de erro. Sem ela e' facil vender ruido como
+    # resultado: um lift de +2.88pp reportado a seco a 1h inverteu para
+    # -0.76pp assim que o detector de cunhas foi corrigido -- estava dentro de
+    # ~2 erros-padrao desde o inicio e nunca tinha sido um resultado robusto.
+    standard_error = float(np.sqrt(markov_accuracy * (1 - markov_accuracy) / len(test_pairs)))
+    lift = markov_accuracy - baseline_accuracy
+    # Kappa: acerto corrigido pelo acaso. E' o unico numero comparavel entre
+    # alfabetos de tamanhos diferentes -- o acerto bruto sobe sozinho quando ha'
+    # menos classes (3 estados dao 47% de acerto com 47% de baseline).
+    kappa = lift / (1 - baseline_accuracy) if baseline_accuracy < 1 else 0.0
+
     return {
         "n_train": len(train_pairs),
         "n_test": len(test_pairs),
-        "markov_top1_accuracy": markov_hits / len(test_pairs),
-        "baseline_frequency_accuracy": baseline_hits / len(test_pairs),
+        "markov_top1_accuracy": markov_accuracy,
+        "baseline_frequency_accuracy": baseline_accuracy,
         "baseline_pattern": most_common,
+        "lift": lift,
+        "standard_error": standard_error,
+        "significant": abs(lift) > 2 * standard_error,
+        "kappa": kappa,
         "n_distinct_transitions": len(counts),
         "matrix_density": len(counts) / (len(config.PATTERN_TYPES) ** 2),
     }

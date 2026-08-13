@@ -137,6 +137,55 @@ def test_same_channel_becomes_a_flag_when_preceded_by_a_pole():
     assert "BULL_FLAG" in detected, detected
 
 
+def test_detects_rising_wedge():
+    # topos E fundos a subir, fundos mais depressa -> canal a fechar
+    closes = _zigzag([100, 112, 104, 116, 109, 119, 113, 121, 117, 122], leg_bars=8)
+    assert "RISING_WEDGE" in _detect_types(closes)
+
+
+def test_detects_falling_wedge():
+    closes = _zigzag([122, 110, 118, 106, 113, 103, 109, 101, 105, 100], leg_bars=8)
+    assert "FALLING_WEDGE" in _detect_types(closes)
+
+
+def test_falling_wedge_is_not_mistaken_for_a_bull_flag():
+    """Regressao: a cunha descendente tem os dois declives negativos e
+    proximos, passava no teste de paralelismo e saia como BULL_FLAG --
+    contaminando o estado mais comum da matriz com uma formacao de
+    significado oposto."""
+    closes = _zigzag([122, 110, 118, 106, 113, 103, 109, 101, 105, 100], leg_bars=8)
+    detected = _detect_types(closes)
+    assert "BULL_FLAG" not in detected, detected
+
+
+def test_wedge_and_triangle_are_not_confused():
+    """Cunha = duas fronteiras no mesmo sentido; triangulo simetrico =
+    sentidos opostos. Se os detectores trocassem a geometria, isto apanha."""
+    wedge = _detect_types(_zigzag([100, 112, 104, 116, 109, 119, 113, 121, 117, 122], leg_bars=8))
+    triangle = _detect_types(_zigzag([100, 122, 106, 118, 110, 115, 112, 114], leg_bars=8))
+    assert "SYMMETRICAL_TRIANGLE" not in wedge
+    assert "RISING_WEDGE" not in triangle and "FALLING_WEDGE" not in triangle
+
+
+def test_parallel_channel_is_not_a_wedge():
+    """Canal paralelo a descer nao converge, logo nao pode ser cunha."""
+    closes = _zigzag([120, 110, 118, 108, 116, 106, 114, 104], leg_bars=8)
+    assert "FALLING_WEDGE" not in _detect_types(closes)
+
+
+def test_detects_broadening_formation():
+    # topos cada vez mais altos E fundos cada vez mais baixos: megafone
+    closes = _zigzag([110, 114, 106, 119, 101, 124, 96, 129], leg_bars=8)
+    detected = _detect_types(closes)
+    assert any(t.startswith("BROADENING") for t in detected), detected
+
+
+def test_broadening_is_not_a_triangle():
+    closes = _zigzag([110, 114, 106, 119, 101, 124, 96, 129], leg_bars=8)
+    detected = _detect_types(closes)
+    assert not any("TRIANGLE" in t for t in detected), detected
+
+
 def test_flat_noise_produces_no_pattern():
     rng = np.random.default_rng(7)
     closes = 100 + rng.normal(0, 0.02, 400).cumsum() * 0.01
