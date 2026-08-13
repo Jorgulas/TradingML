@@ -282,6 +282,69 @@ O `run_patterns.py` retreina e remede isto todos os dias, e o veredicto aparece
 na faixa de topo da página `/patterns`. Quando o histórico acumulado tornar o
 ganho superior a 2 erros-padrão, é uma flag a mudar.
 
+## Terceiro alvo: direção do preço depois do padrão
+
+`src/patterns/direction.py`. Alvo **binário** em vez de 20 classes: *o preço
+sobe ou desce nas H barras a seguir a este padrão?* Usa as mesmas 26 features
+de contexto e os mesmos ~3.400 padrões, mas deixa de os diluir por 20 classes.
+O rótulo é quase equilibrado (51,6% de subidas a H=20), que é o cenário ideal
+para classificação binária.
+
+### A descoberta que enquadra tudo o resto: amostra efetiva
+
+| | Padrões | **Dias distintos** |
+|---|---|---|
+| 1h | 3.447 | **714** |
+| 5m | 1.911 | **61** |
+
+Os 43 tickers movem-se todos com o mercado no mesmo dia, logo observações do
+mesmo dia **não são independentes** — a amostra efetiva conta-se em dias.
+
+A 5m isto é fatal: n efetivo ≈ 61 dá erro-padrão ~6,4 pp, seria preciso uma
+vantagem de ~13 pp para detetar seja o que for. **Nenhum resultado a 5m é
+mensurável**, o que explica retroativamente porque é que tudo o que medi a 5m
+deu ruído. Por isso `PATTERN_DIRECTION["timeframes"] = ["1h"]`.
+
+### Três armadilhas que este módulo evita
+
+1. **Preço de entrada em `confirmed_ts`, não no fim do padrão.** O padrão acaba
+   em `end_ts`, mas só se *sabe* que existe `pivot_window` barras depois. Usar
+   o preço do fim é lookahead puro. Há um teste dedicado a isto.
+2. **Embargo no split.** Um padrão no fim do treino tem o resultado a acontecer
+   dentro da validação — partilhariam as mesmas barras futuras. Descartam-se as
+   observações cuja janela atravessa a fronteira.
+3. **Erro-padrão sobre dias, não sobre padrões.** Calculá-lo sobre 3.400
+   padrões daria ±0,9 pp em vez dos ±4,0 pp reais.
+
+### Resultados (protocolo de 3 partições, horizonte escolhido na validação)
+
+Escolhido pela validação: **H=5 barras, neutro ao mercado, regressão logística**.
+
+| | Valor |
+|---|---|
+| Acerto | 54,9% |
+| Baseline (classe maioritária) | 51,1% |
+| Lift | **+3,8 pp ±4,0 pp** |
+| AUC | 0,536 |
+| Controlo (instantes aleatórios) | 48,9% |
+| Retorno médio previsto em alta / baixa | +0,201% / −0,379% |
+| **Veredicto** | **dentro do ruído** |
+
+Todas as 8 combinações (4 horizontes × bruto/neutro) ficam dentro do ruído. A
+melhor AUC é 0,551 (H=5, bruto) — um cabelo acima do acaso.
+
+### Mas desta vez o "sem sinal" tem uma leitura diferente
+
+O **efeito mínimo detetável é 8,1 pp**. Para detetar uma vantagem de 2 pp — a
+ordem de grandeza do que plausivelmente existiria — seriam precisos ~2.500 dias
+de teste (≈10 anos). Temos 154.
+
+Ou seja: isto **não é "não há sinal", é "não consigo ver sinal desta ordem"**.
+É uma afirmação diferente e mais honesta do que a que o alvo de 20 classes
+permitia. O sinal mais encorajador é o retorno condicional — prever alta dá em
+média +0,20% e prever baixa −0,38%, um diferencial de 0,58 pp com o sinal certo
+— mas não é distinguível de sorte com esta amostra.
+
 ## Testes
 
 ```bash
@@ -318,6 +381,7 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
   sequence.py           cadeia de Markov + beam search 4 passos + avaliacao
   context.py            features de contexto por padrao (para o classificador)
   classifier.py         classificador multiclasse + protocolo de 3 particoes
+  direction.py          alvo binario (sobe/desce), embargo, controlo aleatorio
   live.py               deteccao + previsao em tempo real (<100ms, matriz em cache)
   backfill.py           redeteccao completa do historico
   run_patterns.py       ciclo completo, corre a seguir ao pipeline diario

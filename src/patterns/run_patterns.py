@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import config
 from db import database
-from src.patterns import backfill, classifier, ingest_intraday, live, sequence
+from src.patterns import backfill, classifier, direction, ingest_intraday, live, sequence
 
 
 def main():
@@ -57,6 +57,27 @@ def main():
         database.log_run(conn, today, f"pattern_classifier_{timeframe}", "OK",
                           f"accuracy={result['accuracy']:.4f} markov={result['markov_accuracy']:.4f} "
                           f"delta_pp={delta:.2f} se_pp={se:.2f} verdict={verdict}")
+
+    # Previsao de DIRECCAO pos-padrao (alvo binario). So' a 1h -- a 5m a
+    # amostra efectiva sao 61 dias e nao da' para medir nada.
+    for timeframe in config.PATTERN_DIRECTION["timeframes"]:
+        n_labels = direction.build_outcomes(conn, timeframe)
+        results = direction.run(conn, timeframe)
+        if results:
+            direction.store(conn, results)
+            best = max(results, key=lambda r: r["validation_auc"])
+            print(f"direccao {timeframe}: {n_labels} rotulos | escolhido H={best['horizon_bars']} "
+                  f"{'neutro' if best['market_neutral'] else 'bruto'} -> "
+                  f"acerto {best['accuracy']:.1%} vs baseline {best['baseline_majority']:.1%} "
+                  f"(AUC {best['auc']:.3f}, +-{best['standard_error']*100:.1f}pp sobre "
+                  f"{best['n_effective_days']} dias) -> "
+                  f"{'SIGNIFICATIVO' if best['significant'] else 'dentro do ruido'}")
+            database.log_run(
+                conn, today, f"pattern_direction_{timeframe}", "OK",
+                f"h={best['horizon_bars']} acc={best['accuracy']:.4f} "
+                f"base={best['baseline_majority']:.4f} auc={best['auc']:.4f} "
+                f"se_pp={best['standard_error']*100:.2f} sig={best['significant']}",
+            )
 
     live.get_transitions(conn, config.PATTERN_LIVE_TIMEFRAME, refresh=True)
     stored = 0

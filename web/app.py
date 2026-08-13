@@ -272,7 +272,27 @@ def api_pattern_model():
             "classifier": dict(row) if row else None,
             "classifier_in_use": config.PATTERN_SEQUENCE.get("use_classifier", False),
         }
-    return jsonify(out)
+
+    # Previsao de direccao pos-padrao: alvo binario, medido so' a 1h.
+    selected = conn.execute(
+        """SELECT * FROM pattern_direction_models WHERE selected = 1
+           ORDER BY trained_at DESC LIMIT 1"""
+    ).fetchone()
+    all_horizons = conn.execute(
+        """SELECT horizon_bars, market_neutral, accuracy, baseline_majority, auc,
+                  random_control_accuracy, standard_error, significant
+           FROM pattern_direction_models
+           WHERE trained_at = (SELECT MAX(trained_at) FROM pattern_direction_models)
+           ORDER BY market_neutral, horizon_bars"""
+    ).fetchall()
+
+    return jsonify({
+        "timeframes": out,
+        "direction": {
+            "selected": dict(selected) if selected else None,
+            "horizons": [dict(r) for r in all_horizons],
+        },
+    })
 
 
 if __name__ == "__main__":

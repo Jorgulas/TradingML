@@ -269,6 +269,54 @@ CREATE TABLE IF NOT EXISTS pattern_model_versions (
     notes                        TEXT
 );
 
+-- Rotulo de DIRECCAO depois de um padrao.
+--
+-- ref_close e' o fecho em CONFIRMED_TS, nao no fim do padrao. E' a distincao
+-- que impede lookahead: o padrao acaba em end_ts, mas so' se SABE que existe
+-- pivot_window barras depois, quando o ultimo pivot fica confirmado. Usar o
+-- preco do fim do padrao seria negociar com informacao que ainda nao existia.
+CREATE TABLE IF NOT EXISTS pattern_outcomes (
+    ticker            TEXT NOT NULL REFERENCES watchlist(ticker),
+    timeframe         TEXT NOT NULL,
+    confirmed_ts      TEXT NOT NULL,
+    horizon_bars      INTEGER NOT NULL,
+    pattern_type      TEXT NOT NULL,
+    ref_close         REAL NOT NULL,
+    target_close      REAL NOT NULL,
+    forward_return    REAL NOT NULL,
+    benchmark_return  REAL,
+    excess_return     REAL,
+    direction         INTEGER NOT NULL CHECK (direction IN (0, 1)),
+    excess_direction  INTEGER CHECK (excess_direction IN (0, 1)),
+    computed_at       TEXT NOT NULL,
+    PRIMARY KEY (ticker, timeframe, confirmed_ts, horizon_bars)
+);
+
+CREATE TABLE IF NOT EXISTS pattern_direction_models (
+    version                  TEXT PRIMARY KEY,
+    timeframe                TEXT NOT NULL,
+    horizon_bars             INTEGER NOT NULL,
+    market_neutral           INTEGER NOT NULL,
+    algorithm                TEXT NOT NULL,
+    trained_at               TEXT NOT NULL,
+    n_train                  INTEGER NOT NULL,
+    n_validation             INTEGER NOT NULL,
+    n_test                   INTEGER NOT NULL,
+    n_effective_days         INTEGER NOT NULL,
+    accuracy                 REAL,
+    auc                      REAL,
+    log_loss                 REAL,
+    baseline_majority        REAL,
+    random_control_accuracy  REAL,
+    mean_return_when_up      REAL,
+    mean_return_when_down    REAL,
+    standard_error           REAL,
+    significant              INTEGER,
+    selected                 INTEGER NOT NULL DEFAULT 0,
+    notes                    TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_tf ON intraday_prices(ticker, timeframe, ts);
+CREATE INDEX IF NOT EXISTS idx_pattern_outcomes ON pattern_outcomes(timeframe, horizon_bars, confirmed_ts);
 CREATE INDEX IF NOT EXISTS idx_patterns_ticker_tf ON detected_patterns(ticker, timeframe, confirmed_ts);
 CREATE INDEX IF NOT EXISTS idx_forecasts_lookup ON pattern_forecasts(ticker, timeframe, as_of_ts);

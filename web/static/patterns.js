@@ -169,10 +169,70 @@ function renderRecent(analysis) {
   }).join("");
 }
 
+function renderDirectionPanel(dir) {
+  const el = document.getElementById("direction-panel");
+  if (!el) return;
+  if (!dir || !dir.selected) {
+    el.innerHTML = `<p class="empty-row">ainda sem modelo de direccao treinado</p>`;
+    return;
+  }
+  const s = dir.selected;
+  const lift = (s.accuracy - s.baseline_majority) * 100;
+  const se = s.standard_error * 100;
+  const rows = dir.horizons.map((h) => {
+    const l = (h.accuracy - h.baseline_majority) * 100;
+    return `<tr>
+      <td>${h.horizon_bars}</td>
+      <td>${h.market_neutral ? "neutro vs SPY" : "bruto"}</td>
+      <td>${(h.accuracy * 100).toFixed(1)}%</td>
+      <td>${(h.baseline_majority * 100).toFixed(1)}%</td>
+      <td class="${l > 0 ? "positive" : l < 0 ? "negative" : ""}">${l >= 0 ? "+" : ""}${l.toFixed(1)}pp</td>
+      <td>${h.auc ? h.auc.toFixed(3) : "--"}</td>
+      <td>${h.random_control_accuracy ? (h.random_control_accuracy * 100).toFixed(1) + "%" : "--"}</td>
+      <td>${h.significant ? "significativo" : "ruido"}</td>
+    </tr>`;
+  }).join("");
+
+  el.innerHTML = `
+    <p class="explainer">
+      Alvo diferente do da cadeia: em vez de <em>que padrao vem a seguir</em>, pergunta-se
+      <em>o preco sobe ou desce nas H barras seguintes</em>. Entrada no preco da CONFIRMACAO do
+      padrao (nao no seu fim &mdash; so' se sabe que existe algumas barras depois).
+      O <strong>controlo</strong> e' a mesma medicao em instantes aleatorios que nao sao fim de
+      padrao: se for igual, o padrao nao esta' a dizer nada.
+    </p>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Escolhido pela validacao</h3>
+      <div class="total-value">${(s.accuracy * 100).toFixed(1)}%</div>
+      <div class="pnl ${s.significant ? (lift > 0 ? "positive" : "negative") : ""}">
+        ${lift >= 0 ? "+" : ""}${lift.toFixed(1)}pp vs baseline &plusmn;${se.toFixed(1)}pp
+        &mdash; ${s.significant ? "significativo" : "dentro do ruido"}
+      </div>
+      <div class="meta">
+        <span>H=${s.horizon_bars} barras</span>
+        <span>${s.market_neutral ? "neutro ao mercado" : "retorno bruto"}</span>
+        <span>AUC ${s.auc ? s.auc.toFixed(3) : "--"}</span>
+        <span>${s.n_test} padroes mas so' ${s.n_effective_days} dias distintos</span>
+      </div>
+      <div class="meta">
+        efeito minimo detectavel: ${(2 * se).toFixed(1)}pp &middot;
+        retorno medio previsto em alta ${(s.mean_return_when_up * 100).toFixed(3)}%,
+        em baixa ${(s.mean_return_when_down * 100).toFixed(3)}%
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>H</th><th>rotulo</th><th>acerto</th><th>baseline</th><th>lift</th>
+        <th>AUC</th><th>controlo</th><th>veredicto</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
 async function renderModelStrip() {
   const el = document.getElementById("model-strip");
   try {
-    const model = await fetchJSON("/api/patterns/model");
+    const payload = await fetchJSON("/api/patterns/model");
+    const model = payload.timeframes || payload;
+    renderDirectionPanel(payload.direction);
     el.innerHTML = Object.entries(model).map(([tf, m]) => {
       if (m.markov_top1_accuracy === null || m.markov_top1_accuracy === undefined) {
         return `<span class="warn">${tf}: modelo por treinar</span>`;

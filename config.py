@@ -85,9 +85,16 @@ PATTERN_ONLY = [
     {"ticker": "BA", "name": "Boeing Co.", "sector": "Industrials"},
 ]
 
+# Referencia de mercado, para rotulos neutros ao mercado (retorno da accao
+# menos retorno do indice na MESMA janela). Sem isto mede-se sobretudo a deriva
+# geral das accoes: a 40 barras, 53.7% das janelas sao de subida so' porque o
+# mercado subiu. Nao entra em PATTERN_TICKERS -- nao se detectam padroes nela,
+# so' se usam os seus precos como denominador.
+BENCHMARK = {"ticker": "SPY", "name": "SPDR S&P 500 ETF", "sector": "Benchmark"}
+
 # Tudo o que existe na tabela watchlist (os 8 transaccionados + os restantes).
-ALL_INSTRUMENTS = WATCHLIST + PATTERN_ONLY
-PATTERN_TICKERS = [w["ticker"] for w in ALL_INSTRUMENTS]
+ALL_INSTRUMENTS = WATCHLIST + PATTERN_ONLY + [BENCHMARK]
+PATTERN_TICKERS = [w["ticker"] for w in WATCHLIST + PATTERN_ONLY]
 
 CURRENCY_SYMBOL = "$"
 
@@ -265,4 +272,27 @@ PATTERN_SEQUENCE = {
     # Voltar a por a True quando houver bastante mais historico acumulado e o
     # `py src/patterns/classifier.py` mostrar um ganho acima de 2 erros-padrao.
     "use_classifier": False,
+}
+
+
+# ---------------------------------------------------------------------------
+# Previsao de DIRECCAO depois de um padrao (alvo binario)
+# ---------------------------------------------------------------------------
+# Alvo diferente do de cima: em vez de "que padrao vem a seguir" (20 classes,
+# sem vantagem mensuravel), pergunta-se "o preco sobe ou desce nas H barras a
+# seguir a este padrao". Duas classes, quase equilibradas (51.6% de subidas a
+# H=20), e os mesmos ~3400 exemplos deixam de se espalhar por 20 classes.
+PATTERN_DIRECTION = {
+    # SO' 1h. A 5m ha' 1911 padroes mas apenas 61 dias distintos de historico,
+    # e como os 43 tickers se movem todos com o mercado no mesmo dia, a amostra
+    # efectiva e' o numero de DIAS, nao de padroes. Com n=61 o erro-padrao e'
+    # ~6.4pp: seria preciso uma vantagem de ~13pp para se detectar seja o que
+    # for, o que nao existe em mercados. A 1h ha' 714 dias -> erro-padrao
+    # ~1.9pp, e uma vantagem de 4pp ja' seria visivel.
+    "timeframes": ["1h"],
+    "horizons_bars": [5, 10, 20, 40],   # avaliados todos; o usado escolhe-se na validacao
+    "train_fraction": 0.6,
+    "validation_fraction": 0.2,
+    "n_random_controls": 3000,          # instantes que NAO sao fim de padrao
+    "min_train_rows": 300,
 }
