@@ -382,6 +382,48 @@ acaso, e 57,9% de acerto contra ~51% de base — mas com t=0,88 não é
 distinguível de sorte. Coerente com tudo o resto: o desenho está correto, o que
 falta é histórico.
 
+## Janela de tempo real — o algoritmo a tentar acertar, ao vivo
+
+`src/patterns/realtime.py` + página **`/live`**.
+
+```bash
+py src/patterns/realtime.py --mode replay          # ver funcionar agora
+py src/patterns/realtime.py --mode replay --bars 400 --delay 0.4
+py src/patterns/realtime.py --mode live            # durante o mercado aberto
+```
+
+**Porque é que esta é a avaliação mais honesta do projeto:** cada previsão é
+gravada **antes de a barra que a resolve existir**. Não há lookahead possível —
+nem por engano, nem por um bug subtil no split. É o único número aqui que não
+pode ser viciado.
+
+### Dois modos
+
+| | |
+|---|---|
+| **live** | Busca as barras mais recentes de minuto a minuto. Só com o mercado aberto, e os dados do yfinance vêm com **15–60 min de atraso** (medido). "Tempo real" aqui é tempo real *atrasado*, não tick a tick — está dito na própria página. |
+| **replay** | Percorre barras históricas uma a uma como se estivessem a chegar. Serve para ver o mecanismo com o mercado fechado. Garantia crítica: em cada passo o detetor só vê `bars[:cursor+1]` — há testes dedicados a isso. |
+
+### O que a página mostra
+
+- **Margem de acerto com intervalo de confiança de Wilson.** É o elemento mais
+  importante e está do mesmo tamanho que o número principal. Numa corrida real:
+  25% de acerto com intervalo **4,6% – 69,9%** (n=4). Uma interface ingénua
+  diria "25%, o modelo é péssimo"; a honesta diz "ainda não sabes nada". O
+  intervalo estreitou de 79pp para 62pp ao fim de 6 resoluções.
+- **Curva de aprendizagem** — acerto acumulado com a banda de confiança e a
+  linha do acaso a 50%.
+- **Previsões abertas** a aguardar resultado, e as já resolvidas com acerto/falha.
+- **Contador de atualizações online** do modelo.
+
+### Aprendizagem online
+
+Cada resultado que chega atualiza o modelo por `partial_fit` (SGD logístico),
+arrancando dos coeficientes do modelo treinado nos ~1.900 exemplos históricos.
+É isto que faz a margem mexer enquanto corre. Timeframe de 5m com horizonte de
+6 barras (30 min) — a 1h cada previsão demoraria 5 horas a resolver e não havia
+nada para ver.
+
 ## Testes
 
 ```bash
@@ -407,7 +449,7 @@ src/simulator.py        motor de paper trading
 src/run_daily.py        orquestrador diario (idempotente por data)
 scripts/bootstrap.py    setup inicial do zero (inclui o subsistema de padroes)
 scripts/local_daily_sync.py   o que a tarefa do Windows corre todas as manhas
-web/                    dashboard Flask (so-leitura): / carteiras, /patterns padroes
+web/                    dashboard Flask (so-leitura): / carteiras, /patterns padroes, /live tempo real
 tests/                  pytest
 
 src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
@@ -420,6 +462,7 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
   classifier.py         classificador multiclasse + protocolo de 3 particoes
   direction.py          alvo binario (sobe/desce), embargo, controlo aleatorio
   portfolio.py          terceira carteira: negoceia o sinal de direccao
+  realtime.py           forward test ao vivo (modo live + replay) + aprendizagem online
   live.py               deteccao + previsao em tempo real (<100ms, matriz em cache)
   backfill.py           redeteccao completa do historico
   run_patterns.py       ciclo completo, corre a seguir ao pipeline diario

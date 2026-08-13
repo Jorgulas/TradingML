@@ -312,3 +312,28 @@ PATTERN_PORTFOLIO = {
     "confidence_threshold": 0.55,   # probabilidade minima para abrir posicao
     "max_positions": 10,
 }
+
+
+# ---------------------------------------------------------------------------
+# Forward test ao vivo (janela de tempo real)
+# ---------------------------------------------------------------------------
+PATTERN_REALTIME = {
+    # 5m e nao 1h: com 1h cada previsao demorava 5 HORAS a resolver e nao havia
+    # nada para ver. A 5m com horizonte de 6 barras resolve em 30 minutos.
+    # A avaliacao estatistica a 5m e' fraca (61 dias distintos de historico),
+    # mas aqui isso e' outra coisa -- esta janela acumula evidencia NOVA a
+    # partir do zero, e o intervalo de confianca mostra honestamente quao
+    # incerta ela ainda e'.
+    "timeframe": "5m",
+    "horizon_bars": 6,              # 30 minutos
+    "threshold": 0.5,               # regista TODAS as previsoes, mesmo as fracas
+    "poll_seconds": 60,             # de quanto em quanto tempo busca dados novos
+    "replay_bars": 400,             # quantas barras o modo replay percorre
+    "replay_delay_seconds": 0.4,    # velocidade do replay
+    "scan_window": 400,             # barras visiveis ao detector em cada passo
+    # Aprendizagem online: o modelo e' actualizado a cada resultado que chega,
+    # com SGD partial_fit arrancando dos coeficientes do modelo treinado em
+    # historico. E' isto que faz a margem de acerto mexer "enquanto aprende".
+    "online_learning": True,
+    "online_learning_rate": 0.01,
+}

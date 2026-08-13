@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from db import database
 from src.patterns import live as patterns_live
+from src.patterns import realtime
 from src.patterns.ingest_intraday import load_bars
 
 from flask import Flask, g, jsonify, render_template, request
@@ -230,6 +231,47 @@ def api_pattern_bars(ticker):
             for ts, row in bars.iterrows()
         ]
     })
+
+
+@app.route("/live")
+def live_page():
+    return render_template("live.html")
+
+
+@app.route("/api/live/state")
+def api_live_state():
+    state = realtime.session_state(get_db())
+    state["config"] = {
+        "timeframe": config.PATTERN_REALTIME["timeframe"],
+        "horizon_bars": config.PATTERN_REALTIME["horizon_bars"],
+        "online_learning": config.PATTERN_REALTIME["online_learning"],
+    }
+    return jsonify(state)
+
+
+@app.route("/api/live/accuracy_curve")
+def api_live_accuracy_curve():
+    """Acerto acumulado apos cada resolucao -- a curva de aprendizagem."""
+    conn = get_db()
+    session = conn.execute(
+        "SELECT session_id FROM live_sessions ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+    if session is None:
+        return jsonify({"points": []})
+
+    rows = conn.execute(
+        """SELECT resolve_at_ts, correct FROM live_predictions
+           WHERE session_id = ? AND resolved = 1 ORDER BY resolve_at_ts, id""",
+        (session["session_id"],),
+    ).fetchall()
+
+    points, hits = [], 0
+    for i, row in enumerate(rows, start=1):
+        hits += row["correct"]
+        low, high = realtime.wilson_interval(hits, i)
+        points.append({"n": i, "ts": row["resolve_at_ts"], "accuracy": hits / i,
+                       "low": low, "high": high})
+    return jsonify({"points": points})
 
 
 @app.route("/api/patterns/model")

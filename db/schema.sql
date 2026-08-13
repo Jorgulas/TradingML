@@ -371,7 +371,48 @@ CREATE TABLE IF NOT EXISTS pattern_portfolio_runs (
     notes                TEXT
 );
 
+-- Forward test ao vivo. E' a unica avaliacao que nao pode ser viciada: a
+-- previsao e' gravada ANTES de a barra de resolucao existir, portanto nao ha'
+-- lookahead possivel, nem sequer por engano.
+CREATE TABLE IF NOT EXISTS live_sessions (
+    session_id     TEXT PRIMARY KEY,
+    mode           TEXT NOT NULL CHECK (mode IN ('live', 'replay')),
+    timeframe      TEXT NOT NULL,
+    horizon_bars   INTEGER NOT NULL,
+    threshold      REAL NOT NULL,
+    started_at     TEXT NOT NULL,
+    last_tick_at   TEXT,
+    cursor_ts      TEXT,
+    n_predictions  INTEGER NOT NULL DEFAULT 0,
+    n_resolved     INTEGER NOT NULL DEFAULT 0,
+    n_correct      INTEGER NOT NULL DEFAULT 0,
+    online_updates INTEGER NOT NULL DEFAULT 0,
+    status         TEXT NOT NULL DEFAULT 'running',
+    notes          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS live_predictions (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id          TEXT NOT NULL REFERENCES live_sessions(session_id),
+    ticker              TEXT NOT NULL,
+    pattern_type        TEXT NOT NULL,
+    predicted_at_ts     TEXT NOT NULL,   -- barra em que a previsao foi feita
+    resolve_at_ts       TEXT NOT NULL,   -- barra que ainda NAO existia entao
+    entry_price         REAL NOT NULL,
+    predicted_direction INTEGER NOT NULL CHECK (predicted_direction IN (0, 1)),
+    confidence          REAL NOT NULL,
+    resolved            INTEGER NOT NULL DEFAULT 0,
+    exit_price          REAL,
+    actual_direction    INTEGER,
+    correct             INTEGER,
+    return_pct          REAL,
+    created_at          TEXT NOT NULL,
+    resolved_at         TEXT,
+    UNIQUE (session_id, ticker, predicted_at_ts)
+);
+
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_tf ON intraday_prices(ticker, timeframe, ts);
 CREATE INDEX IF NOT EXISTS idx_pattern_outcomes ON pattern_outcomes(timeframe, horizon_bars, confirmed_ts);
+CREATE INDEX IF NOT EXISTS idx_live_predictions ON live_predictions(session_id, resolved, resolve_at_ts);
 CREATE INDEX IF NOT EXISTS idx_patterns_ticker_tf ON detected_patterns(ticker, timeframe, confirmed_ts);
 CREATE INDEX IF NOT EXISTS idx_forecasts_lookup ON pattern_forecasts(ticker, timeframe, as_of_ts);

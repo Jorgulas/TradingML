@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradingML -- Tempo Real</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>TradingML</h1>
+    <nav class="nav-links">
+      <a href="/">Carteiras</a>
+      <a href="/patterns">Padroes</a>
+      <a href="/live" class="active">Tempo Real</a>
+    </nav>
+    <span class="sim-badge">SIMULACAO -- sem dinheiro real</span>
+  </div>
+  <div class="header-right" id="header-updated">a carregar...</div>
+</header>
+
+<section class="health-strip" id="live-strip">a carregar sessao...</section>
+
+<main>
+  <section class="panel">
+    <p class="explainer">
+      Esta janela e' a avaliacao mais honesta do projecto: cada previsao e' gravada
+      <strong>antes de a barra que a resolve existir</strong>, portanto nao ha' lookahead
+      possivel &mdash; nem por engano, nem por um bug subtil no split.
+      O <strong>intervalo de confianca</strong> ao lado do acerto e' o que impede ler ruido
+      como resultado: com 10 previsoes resolvidas ele e' larguissimo, e so' aperta com
+      centenas.
+      <br>
+      <span class="dim">Nota: "tempo real" aqui e' tempo real ATRASADO &mdash; os dados
+      gratuitos do yfinance chegam com 15 a 60 minutos de atraso, e so' com o mercado aberto.
+      O modo <em>replay</em> percorre barras historicas uma a uma, mostrando ao detector
+      apenas o passado de cada instante.</span>
+    </p>
+  </section>
+
+  <section class="cards" id="live-cards"></section>
+
+  <section class="panel">
+    <h2>Curva de aprendizagem <span class="subtitle">acerto acumulado e intervalo de confianca</span></h2>
+    <canvas id="accuracy-chart" height="80"></canvas>
+  </section>
+
+  <section class="panel positions-panels">
+    <div>
+      <h2>Previsoes abertas <span class="subtitle">a aguardar resultado</span></h2>
+      <div class="table-wrap"><table id="open-table">
+        <thead><tr><th>Ticker</th><th>Padrao</th><th>Aposta</th><th>Confianca</th><th>Entrada</th><th>Resolve em</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+    <div>
+      <h2>Ja' resolvidas</h2>
+      <div class="table-wrap"><table id="resolved-table">
+        <thead><tr><th>Ticker</th><th>Aposta</th><th>Real</th><th>Resultado</th><th>Variacao</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Forward test: previsao gravada antes de o resultado existir. Simulacao educativa &mdash; nao e' aconselhamento financeiro.
+</footer>
+
+<script src="{{ url_for('static', filename='live.js') }}"></script>
+</body>
+</html>
