@@ -227,12 +227,80 @@ function renderDirectionPanel(dir) {
     </table></div>`;
 }
 
+let portfolioChart = null;
+
+function renderPortfolioPanel(pf) {
+  const el = document.getElementById("portfolio-panel");
+  if (!el) return;
+  if (!pf || !pf.run) {
+    el.innerHTML = `<p class="empty-row">carteira de padroes ainda nao corrida</p>`;
+    return;
+  }
+  const r = pf.run;
+  const significant = r.t_statistic_days && Math.abs(r.t_statistic_days) > 2;
+  el.innerHTML = `
+    <p class="explainer">
+      Negoceia o sinal de direccao: entra na confirmacao do padrao, sai exactamente
+      ${r.horizon_bars} barras depois. Corre <strong>so' no periodo de teste</strong>,
+      que nunca serviu para escolher nada. Sem comissoes nem slippage.
+      A <strong>exposicao media e' ${(r.mean_exposure * 100).toFixed(0)}%</strong> &mdash; com um
+      horizonte de poucas horas a carteira esta' em caixa quase sempre, por isso comparar o
+      retorno total com buy &amp; hold nao e' comparacao justa.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <h3>Carteira de padroes</h3>
+        <div class="total-value">$${r.final_value.toLocaleString("pt-PT", {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+        <div class="pnl ${r.total_return > 0 ? "positive" : r.total_return < 0 ? "negative" : ""}">
+          ${(r.total_return * 100).toFixed(2)}% em ${r.n_trades} trades
+        </div>
+        <div class="meta">
+          <span>acerto ${(r.win_rate * 100).toFixed(1)}%</span>
+          <span>${r.period_start.slice(0, 10)} a ${r.period_end.slice(0, 10)}</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Retorno por trade</h3>
+        <div class="total-value">${(r.mean_trade_return * 100).toFixed(3)}%</div>
+        <div class="pnl ${significant ? "positive" : ""}">
+          t=${r.t_statistic_days.toFixed(2)} sobre ${r.n_trade_days} dias
+          &mdash; ${significant ? "significativo" : "dentro do ruido"}
+        </div>
+        <div class="meta">
+          <span>entradas ao acaso: ${(r.random_entry_return * 100).toFixed(4)}%</span>
+          <span>buy &amp; hold: ${(r.buy_hold_return * 100).toFixed(2)}% (100% investido)</span>
+        </div>
+      </div>
+    </div>
+    <canvas id="portfolio-chart" height="70"></canvas>`;
+
+  const points = (pf.equity_curve || []).map((p) => ({ x: p.ts, y: p.total_value }));
+  if (portfolioChart) portfolioChart.destroy();
+  portfolioChart = new Chart(document.getElementById("portfolio-chart"), {
+    type: "line",
+    data: { labels: points.map((p) => p.x), datasets: [{
+      label: "carteira de padroes", data: points.map((p) => p.y),
+      borderColor: "#3ddc97", borderWidth: 2, pointRadius: 0, tension: 0.1,
+    }] },
+    options: {
+      responsive: true, animation: false,
+      scales: {
+        x: { ticks: { color: "#8f9bb8", maxTicksLimit: 8, callback(v) { return fmtTime(this.getLabelForValue(v)); } },
+             grid: { color: "#2a3450" } },
+        y: { ticks: { color: "#8f9bb8" }, grid: { color: "#2a3450" } },
+      },
+      plugins: { legend: { labels: { color: "#e6e9f2" } } },
+    },
+  });
+}
+
 async function renderModelStrip() {
   const el = document.getElementById("model-strip");
   try {
     const payload = await fetchJSON("/api/patterns/model");
     const model = payload.timeframes || payload;
     renderDirectionPanel(payload.direction);
+    renderPortfolioPanel(payload.portfolio);
     el.innerHTML = Object.entries(model).map(([tf, m]) => {
       if (m.markov_top1_accuracy === null || m.markov_top1_accuracy === undefined) {
         return `<span class="warn">${tf}: modelo por treinar</span>`;

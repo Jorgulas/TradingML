@@ -345,6 +345,43 @@ permitia. O sinal mais encorajador é o retorno condicional — prever alta dá 
 média +0,20% e prever baixa −0,38%, um diferencial de 0,58 pp com o sinal certo
 — mas não é distinguível de sorte com esta amostra.
 
+### Terceira carteira: negociar o sinal
+
+`src/patterns/portfolio.py`. **Não** reutiliza o `simulator.py` das outras duas
+carteiras: aquele opera em barras diárias, e o horizonte selecionado é de 5
+barras de 1h (~5 horas de mercado). Manter a posição um dia inteiro
+ultrapassaria o que o modelo prevê, e o backtest deixaria de testar o sinal
+para testar uma aproximação. A regra aqui é a do modelo: **entra na confirmação
+do padrão, sai exatamente `horizon_bars` barras depois**.
+
+Treina em treino+validação, negoceia **só no período de teste**. Sem comissões
+nem slippage.
+
+| | |
+|---|---|
+| Período | 2025-12-19 a 2026-08-13 |
+| Trades | 145 (91 dias distintos) |
+| Taxa de acerto | 57,9% |
+| Retorno total | **+2,40%** |
+| Retorno médio/trade | **+0,207%**, t=0,88 → dentro do ruído |
+| Entradas ao acaso | +0,0004%/trade |
+| Buy & hold do índice | +14,46% |
+
+**Dois números sem os quais isto se lê mal:**
+
+- **A exposição média é 6,6%.** Com um horizonte de poucas horas a carteira
+  está em caixa quase sempre, portanto comparar o seu retorno total com um buy
+  & hold 100% investido **não é comparação justa**. Os +2,40% vêm de capital
+  parado, não de um sinal fraco.
+- **O t-statistic é calculado sobre dias, não sobre trades.** Sobre 145 trades
+  daria t=1,11; sobre os 91 dias distintos dá **t=0,88**. Vários trades do
+  mesmo dia partilham o movimento do mercado e não são independentes.
+
+O sinal aponta na direção certa — +0,207%/trade contra +0,0004% de entradas ao
+acaso, e 57,9% de acerto contra ~51% de base — mas com t=0,88 não é
+distinguível de sorte. Coerente com tudo o resto: o desenho está correto, o que
+falta é histórico.
+
 ## Testes
 
 ```bash
@@ -382,6 +419,7 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
   context.py            features de contexto por padrao (para o classificador)
   classifier.py         classificador multiclasse + protocolo de 3 particoes
   direction.py          alvo binario (sobe/desce), embargo, controlo aleatorio
+  portfolio.py          terceira carteira: negoceia o sinal de direccao
   live.py               deteccao + previsao em tempo real (<100ms, matriz em cache)
   backfill.py           redeteccao completa do historico
   run_patterns.py       ciclo completo, corre a seguir ao pipeline diario

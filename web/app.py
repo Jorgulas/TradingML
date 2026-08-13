@@ -286,12 +286,26 @@ def api_pattern_model():
            ORDER BY market_neutral, horizon_bars"""
     ).fetchall()
 
+    run = conn.execute(
+        "SELECT * FROM pattern_portfolio_runs ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()
+    equity = []
+    if run:
+        equity = [
+            {"ts": r["ts"], "total_value": r["total_value"]}
+            for r in conn.execute(
+                "SELECT ts, total_value FROM pattern_portfolio_equity WHERE run_version = ? ORDER BY ts",
+                (run["version"],),
+            ).fetchall()
+        ]
+
     return jsonify({
         "timeframes": out,
         "direction": {
             "selected": dict(selected) if selected else None,
             "horizons": [dict(r) for r in all_horizons],
         },
+        "portfolio": {"run": dict(run) if run else None, "equity_curve": equity},
     })
 
 

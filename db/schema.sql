@@ -316,6 +316,61 @@ CREATE TABLE IF NOT EXISTS pattern_direction_models (
     notes                    TEXT
 );
 
+-- Terceira carteira simulada, guiada pelo sinal de direccao pos-padrao.
+-- Cadencia propria (entra na confirmacao, sai horizon_bars depois), por isso
+-- tabelas proprias em vez das de simulator.py, que sao diarias.
+CREATE TABLE IF NOT EXISTS pattern_portfolio_trades (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_version   TEXT NOT NULL,
+    ticker        TEXT NOT NULL REFERENCES watchlist(ticker),
+    pattern_type  TEXT NOT NULL,
+    entry_ts      TEXT NOT NULL,
+    exit_ts       TEXT NOT NULL,
+    entry_price   REAL NOT NULL,
+    exit_price    REAL NOT NULL,
+    qty           REAL NOT NULL,
+    confidence    REAL NOT NULL,
+    pnl           REAL NOT NULL,
+    return_pct    REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pattern_portfolio_equity (
+    run_version   TEXT NOT NULL,
+    ts            TEXT NOT NULL,
+    total_value   REAL NOT NULL,
+    cash          REAL NOT NULL,
+    num_positions INTEGER NOT NULL,
+    PRIMARY KEY (run_version, ts)
+);
+
+CREATE TABLE IF NOT EXISTS pattern_portfolio_runs (
+    version              TEXT PRIMARY KEY,
+    created_at           TEXT NOT NULL,
+    timeframe            TEXT NOT NULL,
+    horizon_bars         INTEGER NOT NULL,
+    market_neutral       INTEGER NOT NULL,
+    threshold            REAL NOT NULL,
+    n_trades             INTEGER NOT NULL,
+    starting_cash        REAL NOT NULL,
+    final_value          REAL NOT NULL,
+    total_return         REAL NOT NULL,
+    win_rate             REAL,
+    mean_trade_return    REAL,
+    buy_hold_return      REAL,
+    random_entry_return  REAL,
+    -- Sem estas duas o retorno total le-se mal. A exposicao media ronda os 7%:
+    -- a carteira esta' fora do mercado quase sempre, portanto comparar o seu
+    -- retorno total com buy-and-hold nao e' comparacao justa. E o t-statistic
+    -- e' calculado sobre DIAS distintos, nao sobre trades: varios trades do
+    -- mesmo dia partilham o movimento do mercado e nao sao independentes.
+    mean_exposure        REAL,
+    t_statistic_days     REAL,
+    n_trade_days         INTEGER,
+    period_start         TEXT,
+    period_end           TEXT,
+    notes                TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_tf ON intraday_prices(ticker, timeframe, ts);
 CREATE INDEX IF NOT EXISTS idx_pattern_outcomes ON pattern_outcomes(timeframe, horizon_bars, confirmed_ts);
 CREATE INDEX IF NOT EXISTS idx_patterns_ticker_tf ON detected_patterns(ticker, timeframe, confirmed_ts);

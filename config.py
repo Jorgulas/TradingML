@@ -296,3 +296,19 @@ PATTERN_DIRECTION = {
     "n_random_controls": 3000,          # instantes que NAO sao fim de padrao
     "min_train_rows": 300,
 }
+
+
+# Terceira carteira simulada, guiada pelo sinal de direccao pos-padrao.
+#
+# Nao reutiliza o simulator.py das outras duas: aquele opera em barras
+# DIARIAS, e o horizonte seleccionado aqui e' de 5 barras de 1h -- cerca de 5
+# horas de mercado. Manter a posicao um dia inteiro ja' ultrapassaria o que o
+# modelo preve, e o resultado deixaria de testar o sinal para testar uma
+# aproximacao. Aqui entra-se na confirmacao do padrao e sai-se exactamente
+# horizon_bars barras depois, que e' o que o modelo diz.
+PATTERN_PORTFOLIO = {
+    "starting_cash": 100_000.0,
+    "position_size_pct": 0.08,
+    "confidence_threshold": 0.55,   # probabilidade minima para abrir posicao
+    "max_positions": 10,
+}

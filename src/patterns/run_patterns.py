@@ -12,7 +12,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import config
 from db import database
-from src.patterns import backfill, classifier, direction, ingest_intraday, live, sequence
+from src.patterns import (
+    backfill, classifier, direction, ingest_intraday, live, portfolio, sequence,
+)
 
 
 def main():
@@ -78,6 +80,19 @@ def main():
                 f"base={best['baseline_majority']:.4f} auc={best['auc']:.4f} "
                 f"se_pp={best['standard_error']*100:.2f} sig={best['significant']}",
             )
+
+    # Terceira carteira simulada, guiada pelo sinal de direccao.
+    backtest = portfolio.run_backtest(conn)
+    if backtest:
+        portfolio.store(conn, backtest)
+        t_stat = backtest["t_statistic_days"]
+        print(f"carteira de padroes: {backtest['n_trades']} trades, "
+              f"{backtest['total_return']:+.2%} (exposicao media {backtest['mean_exposure']:.0%}), "
+              f"retorno/trade {backtest['mean_trade_return']:+.4%} "
+              f"(t={t_stat:.2f} -> {'SIGNIFICATIVO' if t_stat and abs(t_stat) > 2 else 'ruido'})")
+        database.log_run(conn, today, "pattern_portfolio", "OK",
+                          f"trades={backtest['n_trades']} ret={backtest['total_return']:.4f} "
+                          f"t={t_stat} exposure={backtest['mean_exposure']:.4f}")
 
     live.get_transitions(conn, config.PATTERN_LIVE_TIMEFRAME, refresh=True)
     stored = 0
