@@ -49,7 +49,8 @@ def predict(conn, ticker: str, timeframe: str = None, model: str = None) -> dict
 
     started = time.perf_counter()
     builder = F.indicator_features if model == "indicators" else F.microstructure_features
-    matrix = builder(bars).dropna()
+    benchmark = load_bars(conn, config.BENCHMARK["ticker"], timeframe, limit=200)
+    matrix = builder(bars).join(F.market_context_features(bars, benchmark)).dropna()
     if matrix.empty:
         return None
 

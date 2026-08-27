@@ -223,6 +223,57 @@ def microstructure_features(bars: pd.DataFrame, window: int = None) -> pd.DataFr
     return out[microstructure_feature_names(window)]
 
 
+# --------------------------------------------------------------------------
+# CONTEXTO DE MERCADO -- informacao que nenhum dos dois modelos tinha
+# --------------------------------------------------------------------------
+# Os dois conjuntos acima olham para a accao isolada. Mas o retorno de um
+# minuto e' dominado pelo factor mercado: quando o indice cai, quase tudo cai.
+# Saber que uma accao subiu 0.2% diz pouco; saber que subiu 0.2% enquanto o
+# mercado caiu 0.3% diz muito mais. Estas features separam a parte
+# idiossincratica da parte comum.
+
+MARKET_FEATURES = [
+    "mkt_ret_1", "mkt_ret_5", "mkt_ret_20",       # o que o mercado esta a fazer
+    "excess_ret_1", "excess_ret_5", "excess_ret_20",  # accao menos mercado
+    "beta_60",                                     # sensibilidade recente ao mercado
+    "corr_60",                                     # quanto e' que ainda segue o mercado
+    "rel_strength_20",                             # forca relativa ao indice
+    "mkt_vol_20",                                  # regime de volatilidade do mercado
+]
+
+
+def market_context_features(bars: pd.DataFrame, benchmark: pd.DataFrame) -> pd.DataFrame:
+    """Alinha a accao com o indice pelos timestamps e mede a relacao entre os
+    dois. Reindexa pelo indice das barras da accao (sem preencher para a
+    frente para la' do que existe), para nunca usar um valor do indice
+    posterior a' barra em questao."""
+    out = pd.DataFrame(index=bars.index)
+    if benchmark is None or benchmark.empty:
+        for name in MARKET_FEATURES:
+            out[name] = 0.0
+        return out[MARKET_FEATURES]
+
+    market_close = benchmark["close"].reindex(bars.index).ffill()
+    close = bars["close"]
+    stock_returns = close.pct_change()
+    market_returns = market_close.pct_change()
+
+    for lag in (1, 5, 20):
+        out[f"mkt_ret_{lag}"] = market_close.pct_change(lag)
+        out[f"excess_ret_{lag}"] = close.pct_change(lag) - market_close.pct_change(lag)
+
+    covariance = stock_returns.rolling(60, min_periods=60).cov(market_returns)
+    market_variance = market_returns.rolling(60, min_periods=60).var()
+    out["beta_60"] = covariance / market_variance.replace(0, np.nan)
+    out["corr_60"] = stock_returns.rolling(60, min_periods=60).corr(market_returns)
+
+    relative = close / market_close
+    out["rel_strength_20"] = relative / relative.rolling(20, min_periods=20).mean() - 1
+    out["mkt_vol_20"] = market_returns.rolling(20, min_periods=20).std()
+
+    return out[MARKET_FEATURES]
+
+
 def _longest_run(values: np.ndarray) -> float:
     best = current = 0
     for value in values:
@@ -234,6 +285,45 @@ def _longest_run(values: np.ndarray) -> float:
 # --------------------------------------------------------------------------
 # Rotulo de tres classes
 # --------------------------------------------------------------------------
+
+def label_magnitude(bars: pd.DataFrame, horizon: int = None, band_k: float = None) -> pd.DataFrame:
+    """Alvo de MAGNITUDE: quao grande e' o proximo movimento, ignorando o lado.
+
+    Porque este alvo e nao a direccao: a decomposicao da precisao do modelo de
+    direccao mostrou 82.0% de acerto a saber QUE vinha movimento contra 53.5%
+    a saber PARA ONDE. O sinal que o modelo tem e' de magnitude; medir
+    direccao era medir a coisa errada e atribuir-lhe o merito da outra.
+
+    Duas leituras do mesmo alvo:
+      big_move        -- binario: o movimento sai da banda de indiferenca?
+      magnitude_ratio -- continuo: o movimento vale quantos desvios-padrao
+                         recentes? E' o alvo de regressao, e diz QUANTO em vez
+                         de apenas SE.
+
+    Nota importante sobre o desenho: a banda e' escalada pela volatilidade
+    RECENTE, portanto o alvo ja' esta' normalizado por ela. Isto impede que a
+    tarefa seja trivialmente resolvida por "esteve volatil, vai continuar
+    volatil" -- a fasquia sobe junto com a volatilidade."""
+    horizon = horizon or T["horizon_bars"]
+    band_k = T["band_k"] if band_k is None else band_k
+
+    close = bars["close"]
+    forward_return = close.shift(-horizon) / close - 1
+    volatility = close.pct_change().rolling(T["band_vol_window"],
+                                            min_periods=T["band_vol_window"]).std()
+    scale = volatility * np.sqrt(horizon)
+
+    magnitude_ratio = forward_return.abs() / scale.replace(0, np.nan)
+    big_move = (magnitude_ratio > band_k).astype(float)
+    big_move[magnitude_ratio.isna()] = np.nan
+
+    return pd.DataFrame({
+        "big_move": big_move,
+        "magnitude_ratio": magnitude_ratio,
+        "abs_return": forward_return.abs(),
+        "band": band_k * scale,
+    }, index=bars.index)
+
 
 def label_three_class(bars: pd.DataFrame, horizon: int = None, band_k: float = None) -> pd.DataFrame:
     """SOBE / DESCE / ESPERAR sobre as proximas `horizon` barras.

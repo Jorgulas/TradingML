@@ -257,6 +257,27 @@ def api_trees_models():
     return jsonify({"models": models})
 
 
+@app.route("/api/trees/magnitude")
+def api_trees_magnitude():
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT * FROM magnitude_models WHERE version IN (
+             SELECT version FROM magnitude_models m2
+             WHERE m2.model_kind = magnitude_models.model_kind
+               AND m2.timeframe = magnitude_models.timeframe
+             ORDER BY trained_at DESC LIMIT 1)
+           ORDER BY effective_days DESC, model_kind"""
+    ).fetchall()
+    models = []
+    for row in rows:
+        item = dict(row)
+        for field in ("coverage_curve_json", "deciles_json", "sweep_json", "top_features_json"):
+            if item.get(field):
+                item[field.replace("_json", "")] = json.loads(item.pop(field))
+        models.append(item)
+    return jsonify({"models": models})
+
+
 @app.route("/api/trees/decisions")
 def api_trees_decisions():
     from src.trees import live as trees_live

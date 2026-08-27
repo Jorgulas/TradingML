@@ -432,6 +432,12 @@ CREATE TABLE IF NOT EXISTS tree_models (
     action_precision        REAL,
     action_precision_baseline REAL,
     action_precision_lift   REAL,
+    -- precisao = move_detection x direction_accuracy. Ver o comentario em
+    -- src/trees/train.py: sem esta separacao o lift le-se como previsao de
+    -- direccao quando e' quase todo previsao de volatilidade.
+    move_detection          REAL,
+    move_base_rate          REAL,
+    direction_accuracy      REAL,
     up_precision            REAL,
     down_precision          REAL,
     up_base_rate            REAL,
@@ -442,7 +448,8 @@ CREATE TABLE IF NOT EXISTS tree_models (
     latency_ms              REAL,
     class_distribution_json TEXT,
     top_features_json       TEXT,
-    sweep_json              TEXT
+    sweep_json              TEXT,
+    precision_curve_json    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_tf ON intraday_prices(ticker, timeframe, ts);
@@ -450,3 +457,36 @@ CREATE INDEX IF NOT EXISTS idx_pattern_outcomes ON pattern_outcomes(timeframe, h
 CREATE INDEX IF NOT EXISTS idx_live_predictions ON live_predictions(session_id, resolved, resolve_at_ts);
 CREATE INDEX IF NOT EXISTS idx_patterns_ticker_tf ON detected_patterns(ticker, timeframe, confirmed_ts);
 CREATE INDEX IF NOT EXISTS idx_forecasts_lookup ON pattern_forecasts(ticker, timeframe, as_of_ts);
+
+
+-- Alvo de MAGNITUDE (nao de direccao). Ver src/trees/magnitude.py: o modelo
+-- de direccao mostrou 82% a saber que vinha movimento e 53.5% a saber para
+-- onde, portanto o sinal que existe e' de magnitude.
+CREATE TABLE IF NOT EXISTS magnitude_models (
+    version                TEXT PRIMARY KEY,
+    model_kind             TEXT NOT NULL,
+    timeframe              TEXT NOT NULL,
+    max_depth              INTEGER NOT NULL,
+    trained_at             TEXT NOT NULL,
+    n_train                INTEGER NOT NULL,
+    n_validation           INTEGER NOT NULL,
+    n_test                 INTEGER NOT NULL,
+    effective_days         INTEGER NOT NULL,
+    accuracy               REAL,
+    auc                    REAL,
+    base_rate              REAL,
+    majority_baseline      REAL,
+    -- Baseline de uma linha: so' a volatilidade recente. Qualquer modelo tem
+    -- obrigacao de bater isto, senao as 40 features nao acrescentam nada.
+    baseline_vol_auc       REAL,
+    spearman               REAL,
+    baseline_vol_spearman  REAL,
+    top_bottom_ratio       REAL,
+    standard_error         REAL,
+    significant            INTEGER,
+    latency_ms             REAL,
+    coverage_curve_json    TEXT,
+    deciles_json           TEXT,
+    sweep_json             TEXT,
+    top_features_json      TEXT
+);

@@ -96,6 +96,29 @@ BENCHMARK = {"ticker": "SPY", "name": "SPDR S&P 500 ETF", "sector": "Benchmark"}
 ALL_INSTRUMENTS = WATCHLIST + PATTERN_ONLY + [BENCHMARK]
 PATTERN_TICKERS = [w["ticker"] for w in WATCHLIST + PATTERN_ONLY]
 
+# Universo alargado para as arvores de decisao. Mais tickers = mais dados, que
+# foi a UNICA alavanca que demonstrou melhorar resultados neste projecto
+# (8 -> 43 melhorou de forma medida). Nao aumenta os dias de calendario, mas
+# aumenta a parte idiossincratica de cada accao, que e' parcialmente
+# independente do factor mercado.
+TREE_EXTRA_TICKERS = [
+    "ABT", "ACN", "ADI", "ADP", "AIG", "AMAT", "AMGN", "AON", "APD",
+    "AXP", "AZO", "BDX", "BK", "BKNG", "BLK", "BMY", "BSX", "C", "CB",
+    "CCI", "CI", "CL", "CMCSA", "CME", "CMG", "COF", "CRWD", "CSX", "CVS",
+    "D", "DE", "DHR", "DOW", "DUK", "EA", "ECL", "EL", "EMR", "EOG",
+    "EQIX", "ETN", "EW", "F", "FDX", "FIS", "GD", "GE", "GILD", "GM",
+    "HCA", "HON", "HUM", "IBM", "ICE", "INTU", "ISRG", "ITW", "JCI",
+    "KHC", "KLAC", "KMB", "KMI", "LIN", "LMT", "LOW", "LRCX", "MAR", "MCK",
+    "MDLZ", "MDT", "MET", "MMC", "MMM", "MO", "MPC", "MRVL", "MSI", "MU",
+    "NEE", "NOC", "NOW", "NSC", "NXPI", "ORLY", "OXY", "PANW", "PGR", "PH",
+    "PLD", "PM", "PNC", "PSA", "PSX", "PYPL", "REGN", "RTX", "SBUX", "SCHW",
+    "SHW", "SLB", "SNPS", "SO", "SPGI", "SYK", "T", "TGT", "TJX", "TMO",
+    "TMUS", "TT", "UNP", "UPS", "USB", "VLO", "VRTX", "VZ", "WM", "ZTS",
+]
+
+# Tudo o que as arvores usam: os 43 do subsistema de padroes + os extra.
+TREE_TICKERS = PATTERN_TICKERS + [t for t in TREE_EXTRA_TICKERS if t not in PATTERN_TICKERS]
+
 CURRENCY_SYMBOL = "$"
 
 # Perguntas booleanas diárias que a tarefa agendada (Claude) responde por ticker.
@@ -352,7 +375,10 @@ TREES = {
     # pouquissimos dias efectivos. 5m da' 60 dias. Treinam-se os dois e
     # reporta-se a diferenca, porque sao as linhas que alimentam a capacidade
     # da arvore mas sao os DIAS que dao poder estatistico.
-    "timeframes": ["1m", "5m"],
+    # 1h entra por causa do PODER ESTATISTICO: 714 dias efectivos contra 14 a
+    # 5m e 2 a 1m. E' o unico timeframe onde uma vantagem real seria visivel --
+    # a 1m o erro-padrao e' +-35pp e nada e' mensuravel.
+    "timeframes": ["1h", "5m", "1m"],
     "horizon_bars": 1,          # prever a barra seguinte
     "window_bars": 10,          # janela do modelo B ("ultimos 10 minutos")
 

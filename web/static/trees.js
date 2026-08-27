@@ -56,6 +56,11 @@ function renderCards(models) {
           <span>accuracy 3 classes: ${(m.accuracy * 100).toFixed(1)}%</span>
           <span>baseline (sempre ${m.baseline_class}): ${(m.baseline_majority * 100).toFixed(1)}%</span>
         </div>
+        <div class="meta decomposition">
+          <span><strong>decomposicao:</strong> deteccao de movimento
+            ${(m.move_detection * 100).toFixed(1)}% (base ${(m.move_base_rate * 100).toFixed(1)}%)
+            &times; direccao <strong>${(m.direction_accuracy * 100).toFixed(1)}%</strong> (acaso 50%)</span>
+        </div>
         <div class="meta">
           <span>sobe ${m.up_precision === null ? "--" : (m.up_precision * 100).toFixed(1) + "%"}</span>
           <span>desce ${m.down_precision === null ? "--" : (m.down_precision * 100).toFixed(1) + "%"}</span>
@@ -115,6 +120,26 @@ function renderDepthChart(models) {
   });
 }
 
+function renderPrecisionCurve(models) {
+  const el = document.getElementById("precision-curve");
+  if (!el) return;
+  const rows = models.flatMap((m) => (m.precision_curve || [])
+    .filter((p) => p.precision !== null)
+    .map((p) => ({ ...p, kind: KIND_LABEL[m.model_kind], tf: m.timeframe })));
+  if (!rows.length) { el.innerHTML = `<p class="empty-row">sem curva</p>`; return; }
+
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Modelo</th><th>TF</th><th>Limiar</th><th>Cobertura</th>
+      <th>Precisao</th><th>Lift</th><th>n</th></tr></thead>
+    <tbody>${rows.map((p) => `<tr>
+      <td>${p.kind}</td><td>${p.tf}</td><td>${p.threshold.toFixed(2)}</td>
+      <td>${(p.coverage * 100).toFixed(1)}%</td>
+      <td><strong>${(p.precision * 100).toFixed(1)}%</strong></td>
+      <td class="${p.lift > 0 ? "positive" : "negative"}">${p.lift >= 0 ? "+" : ""}${(p.lift * 100).toFixed(1)}pp</td>
+      <td>${p.n.toLocaleString("pt-PT")}</td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
 function renderImportances(models) {
   const el = document.getElementById("importances");
   el.innerHTML = models.map((m) => {
@@ -161,18 +186,77 @@ function renderDecisions(payload) {
   }).join("");
 }
 
+function renderMagnitude(models) {
+  const el = document.getElementById("magnitude-panel");
+  if (!el) return;
+  if (!models.length) {
+    el.innerHTML = `<p class="empty-row">corre <code>py src/trees/magnitude.py</code></p>`;
+    return;
+  }
+  const best = models[0];
+  const deciles = best.deciles || [];
+  const maxRealised = Math.max(...deciles.map((d) => d.mean_realised), 1);
+
+  el.innerHTML = `
+    <div class="cards">
+      ${models.map((m) => `
+        <div class="card">
+          <h3>${KIND_LABEL[m.model_kind]} &middot; ${m.timeframe}</h3>
+          <div class="total-value">${(m.accuracy * 100).toFixed(1)}%</div>
+          <div class="pnl ${m.significant ? "positive" : ""}">
+            vs ${(m.majority_baseline * 100).toFixed(1)}% de base
+            &plusmn;${(m.standard_error * 100).toFixed(1)}pp
+            &mdash; ${m.significant ? "significativo" : "dentro do ruido"}
+          </div>
+          <div class="meta">
+            <span>AUC <strong>${m.auc.toFixed(3)}</strong></span>
+            <span>baseline volatilidade ${m.baseline_vol_auc.toFixed(3)}</span>
+          </div>
+          <div class="meta">
+            <span>Spearman ${m.spearman.toFixed(3)}</span>
+            <span>decil topo/fundo <strong>${m.top_bottom_ratio.toFixed(2)}&times;</strong></span>
+            <span>${m.effective_days} dias efectivos</span>
+          </div>
+        </div>`).join("")}
+    </div>
+    <h3 style="font-size:.92rem;margin:16px 0 8px">
+      Calibracao por decil &mdash; ${KIND_LABEL[best.model_kind]} @ ${best.timeframe}
+      <span class="subtitle">previsto vs realmente acontecido, em desvios-padrao</span>
+    </h3>
+    ${deciles.map((d) => `
+      <div style="display:flex;align-items:center;gap:10px;margin:3px 0">
+        <span style="flex:0 0 60px;font-size:.78rem;color:var(--text-dim)">decil ${d.decile}</span>
+        <span style="flex:0 0 78px;font-size:.78rem">prev ${d.mean_predicted.toFixed(2)}</span>
+        <div style="flex:1;background:var(--bg-card);border-radius:4px;height:15px">
+          <div style="width:${(d.mean_realised / maxRealised) * 100}%;background:var(--green);height:100%;border-radius:4px"></div>
+        </div>
+        <span style="flex:0 0 74px;text-align:right;font-size:.78rem">real ${d.mean_realised.toFixed(2)}</span>
+      </div>`).join("")}
+    <div class="table-wrap" style="margin-top:14px"><table>
+      <thead><tr><th>Limiar</th><th>Cobertura</th><th>Precisao</th><th>Lift</th><th>n</th></tr></thead>
+      <tbody>${(best.coverage_curve || []).filter((c) => c.precision !== null).map((c) => `
+        <tr><td>${c.threshold.toFixed(2)}</td><td>${(c.coverage * 100).toFixed(1)}%</td>
+        <td><strong>${(c.precision * 100).toFixed(1)}%</strong></td>
+        <td class="positive">+${(c.lift * 100).toFixed(1)}pp</td>
+        <td>${c.n.toLocaleString("pt-PT")}</td></tr>`).join("")}</tbody>
+    </table></div>`;
+}
+
 async function refresh() {
   const started = performance.now();
   try {
     const timeframe = document.getElementById("timeframe-select").value;
-    const [models, decisions] = await Promise.all([
+    const [models, decisions, magnitudes] = await Promise.all([
       fetchJSON("/api/trees/models"),
       fetchJSON(`/api/trees/decisions?timeframe=${timeframe}`),
+      fetchJSON("/api/trees/magnitude"),
     ]);
+    renderMagnitude(magnitudes.models);
     renderStrip(models.models);
     renderCards(models.models);
     renderDepthChart(models.models);
     renderImportances(models.models);
+    renderPrecisionCurve(models.models);
     renderDecisions(decisions);
     document.getElementById("calc-time").textContent =
       `actualizado em ${(performance.now() - started).toFixed(0)}ms`;

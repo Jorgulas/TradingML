@@ -193,3 +193,10 @@ footer {
 .step-stats strong { color: var(--text); }
 .badge.warn-badge { background: rgba(245,182,76,0.15); color: var(--amber); }
 .chip em { font-style: normal; opacity: 0.65; }
+
+.meta.decomposition {
+  background: rgba(245, 182, 76, 0.08);
+  border-left: 2px solid var(--amber);
+  padding: 6px 10px; border-radius: 4px; margin-top: 8px;
+}
+.meta.decomposition strong { color: var(--amber); }

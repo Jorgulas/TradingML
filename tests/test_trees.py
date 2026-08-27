@@ -96,6 +96,39 @@ def test_microstructure_features_do_not_use_future_bars():
     pd.testing.assert_frame_equal(original.iloc[:200], after.iloc[:200])
 
 
+def test_market_context_features_do_not_use_future_bars():
+    """As features de mercado foram acrescentadas depois dos testes originais e
+    ficaram sem cobertura -- e sao elas que sustentam o melhor resultado do
+    projecto. Se o indice do futuro vazasse por aqui, esse resultado nao
+    valeria nada."""
+    bars = _bars(300, seed=3)
+    benchmark = _bars(300, seed=9)
+    original = F.market_context_features(bars, benchmark)
+
+    mutated = benchmark.copy()
+    mutated.iloc[200:, mutated.columns.get_loc("close")] *= 2.0
+    after = F.market_context_features(bars, mutated)
+
+    pd.testing.assert_frame_equal(original.iloc[:200], after.iloc[:200])
+
+
+def test_market_features_react_to_the_benchmark_at_all():
+    """Contraprova: se nao reagissem a nada, o teste acima passava trivialmente."""
+    bars = _bars(300, seed=3)
+    benchmark = _bars(300, seed=9)
+    original = F.market_context_features(bars, benchmark)
+    mutated = benchmark.copy()
+    mutated.iloc[100:, mutated.columns.get_loc("close")] *= 2.0
+    after = F.market_context_features(bars, mutated)
+    assert not original.iloc[150:200].equals(after.iloc[150:200])
+
+
+def test_market_features_survive_a_missing_benchmark():
+    result = F.market_context_features(_bars(120), pd.DataFrame())
+    assert list(result.columns) == F.MARKET_FEATURES
+    assert result.notna().all().all()
+
+
 def test_label_does_use_the_future_which_is_the_point():
     """Contraprova do teste anterior: o ROTULO tem mesmo de mudar."""
     bars = _bars(300)
@@ -219,3 +252,90 @@ def test_seconds_data_is_not_claimed_anywhere():
     """O yfinance rejeita interval=1s. Nenhum timeframe pode prometer segundos."""
     assert all(tf in config.PATTERN_TIMEFRAMES for tf in config.TREES["timeframes"])
     assert not any(tf.endswith("s") for tf in config.TREES["timeframes"])
+
+
+# --------------------------------------------------------------------------
+# Alvo de MAGNITUDE
+# --------------------------------------------------------------------------
+
+def test_magnitude_is_identical_for_equal_moves_in_opposite_directions():
+    """O ponto central do alvo: um salto de +2% e um de -2%, com o mesmo
+    historico de volatilidade, tem de dar exactamente a mesma magnitude.
+
+    (Nao se testa isto espelhando precos com 2*base - preco: retornos
+    percentuais nao sao simetricos sob reflexao -- 105->106 e' +0.95% e o
+    espelho 95->94 e' -1.05%. Constroi-se o salto explicitamente.)"""
+    rng = np.random.default_rng(5)
+    history = [100.0]
+    for _ in range(60):
+        history.append(history[-1] * (1 + rng.choice([0.003, -0.003])))
+
+    def series(final_move):
+        closes = history + [history[-1] * (1 + final_move)]
+        index = pd.date_range("2026-08-10 13:30", periods=len(closes), freq="1min", tz="UTC")
+        return pd.DataFrame({"open": closes, "high": closes, "low": closes,
+                             "close": closes, "volume": np.full(len(closes), 5000)}, index=index)
+
+    up = F.label_magnitude(series(0.02))["magnitude_ratio"].iloc[-2]
+    down = F.label_magnitude(series(-0.02))["magnitude_ratio"].iloc[-2]
+    assert up == pytest.approx(down, rel=1e-9)
+    assert up > 0
+
+
+def test_magnitude_ratio_is_a_pure_function_of_the_absolute_move():
+    """Contraprova algebrica: magnitude = |retorno| / (banda / band_k).
+    Se a direccao entrasse por algum lado, esta igualdade partia."""
+    result = F.label_magnitude(_bars(400), band_k=0.5).dropna()
+    implied = result["abs_return"] / (result["band"] / 0.5)
+    pd.testing.assert_series_equal(result["magnitude_ratio"], implied,
+                                   check_names=False, rtol=1e-9)
+
+
+def test_big_move_is_magnitude_above_the_band():
+    result = F.label_magnitude(_bars(400)).dropna()
+    big = result[result["big_move"] == 1]
+    small = result[result["big_move"] == 0]
+    assert (big["abs_return"] > big["band"]).all()
+    assert (small["abs_return"] <= small["band"]).all()
+
+
+def test_magnitude_ratio_is_the_move_in_recent_standard_deviations():
+    result = F.label_magnitude(_bars(400), band_k=0.5).dropna()
+    assert ((result["magnitude_ratio"] > 0.5) == (result["big_move"] == 1)).all()
+
+
+def test_big_move_base_rate_is_not_degenerate():
+    """Se quase tudo fosse grande (ou quase nada), o alvo nao teria conteudo."""
+    share = F.label_magnitude(_bars(800))["big_move"].dropna().mean()
+    assert 0.2 < share < 0.8, f"taxa-base degenerada: {share:.1%}"
+
+
+def test_magnitude_label_does_not_leak_the_future_into_features():
+    """O rotulo usa o futuro (e' suposto); as features nao. Contraprova de que
+    os dois blocos estao mesmo separados."""
+    bars = _bars(300)
+    features_before = F.indicator_features(bars).iloc[:200]
+    mutated = bars.copy()
+    mutated.iloc[250:, mutated.columns.get_loc("close")] *= 3.0
+    pd.testing.assert_frame_equal(features_before, F.indicator_features(mutated).iloc[:200])
+    assert not F.label_magnitude(bars)["magnitude_ratio"].iloc[240:260].equals(
+        F.label_magnitude(mutated)["magnitude_ratio"].iloc[240:260])
+
+
+def test_decile_lift_ranks_by_predicted_magnitude():
+    from src.trees import magnitude
+    predictions = np.linspace(0, 1, 1000)
+    realised = predictions * 2          # relacao perfeita
+    deciles = magnitude.decile_lift(predictions, realised)
+    assert len(deciles) == 10
+    means = [d["mean_realised"] for d in deciles]
+    assert means == sorted(means), "os decis tem de ficar por ordem crescente"
+    assert means[-1] > means[0] * 5
+
+
+def test_decile_lift_is_flat_when_predictions_are_noise():
+    from src.trees import magnitude
+    rng = np.random.default_rng(4)
+    deciles = magnitude.decile_lift(rng.random(2000), rng.random(2000))
+    means = [d["mean_realised"] for d in deciles]
+    assert max(means) - min(means) < 0.15, "ruido nao pode produzir lift entre decis"

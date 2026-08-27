@@ -6,3 +6,4 @@ flask
 joblib
 pytest
 xgboost
+scipy

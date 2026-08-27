@@ -38,6 +38,13 @@
       quando o movimento seguinte cabe dentro de uma banda escalada pela volatilidade, nao agir
       e' a resposta certa.
       <br>
+      <span class="dim"><strong>Leitura obrigatoria:</strong> a precisao decompoe-se em
+      <em>deteccao de movimento</em> &times; <em>acerto de direccao</em>. Medido a 1h:
+      82,0% &times; 53,5% = 43,8%. Ou seja, o modelo e' muito bom a saber <em>que vai haver
+      movimento</em> (clustering de volatilidade, um efeito real e forte) e apenas 53,5% a
+      saber <em>para onde</em> &mdash; dentro do ruido. Ler a precisao sem esta separacao seria
+      confundir prever volatilidade com prever direccao.</span>
+      <br>
       <span class="dim">A metrica que decide nao e' a accuracy. Com ESPERAR a ser ~42% das
       barras, responder sempre ESPERAR da' 42% e nunca actua. O numero que interessa e' a
       <strong>precisao quando o modelo se atreve a decidir</strong>, junto com a fatia de vezes
@@ -81,6 +88,30 @@
         <tbody></tbody>
       </table>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2>Alvo de MAGNITUDE <span class="subtitle">quao grande e' o proximo movimento</span></h2>
+    <p class="explainer">
+      A decomposicao acima mostrou onde esta' o sinal: <strong>82% a saber que vem movimento,
+      53,5% a saber para onde</strong>. Estes modelos trocam o alvo por aquilo que o modelo
+      demonstra saber &mdash; a <strong>magnitude</strong>, ignorando o lado.
+      A baseline exigente aqui nao e' a classe maioritaria: e' a
+      <strong>persistencia de volatilidade</strong> (uma unica feature, "esteve volatil, continua
+      volatil"). Bater essa e' que prova que as 40 features valem alguma coisa.
+    </p>
+    <div id="magnitude-panel">a carregar...</div>
+  </section>
+
+  <section class="panel">
+    <h2>Precisao vs cobertura <span class="subtitle">decidir menos vezes e melhor</span></h2>
+    <p class="explainer">
+      A forma legitima de subir a precisao: em vez de escolher sempre a classe mais provavel,
+      so' decidir quando essa probabilidade passa um limiar. A precisao sobe e a
+      <strong>cobertura desce</strong> &mdash; as duas sao mostradas juntas de proposito, porque
+      ler a precisao sozinha seria enganador.
+    </p>
+    <div id="precision-curve">a carregar...</div>
   </section>
 
   <section class="panel">

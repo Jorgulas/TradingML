@@ -46,7 +46,18 @@ def seed_watchlist(conn: sqlite3.Connection) -> None:
     config.py."""
     now = datetime.now(timezone.utc).isoformat()
     traded = set(config.TICKERS)
-    for item in config.ALL_INSTRUMENTS:
+
+    # Os tickers extra das arvores entram como instrumentos minimos: existem
+    # so' para haver mais dados de treino, nunca sao transaccionados nem
+    # avaliados em noticias. A chave estrangeira de intraday_prices exige que
+    # estejam aqui.
+    known = {item["ticker"] for item in config.ALL_INSTRUMENTS}
+    instruments = list(config.ALL_INSTRUMENTS) + [
+        {"ticker": t, "name": t, "sector": "Tree universe"}
+        for t in config.TREE_TICKERS if t not in known
+    ]
+
+    for item in instruments:
         conn.execute(
             """INSERT INTO watchlist (ticker, name, sector, active, added_date)
                VALUES (?, ?, ?, ?, ?)

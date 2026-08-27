@@ -38,17 +38,27 @@ T = config.TREES
 MODELS = ("indicators", "microstructure")
 
 
+def feature_names_for(model: str) -> list:
+    """Os dois modelos partilham o bloco de contexto de mercado -- a relacao
+    com o indice nao pertence a nenhuma das duas leituras em particular, e
+    negar-lha so' porque a outra tambem a usa seria mutilar ambas."""
+    base = (F.INDICATOR_FEATURES if model == "indicators"
+            else F.microstructure_feature_names())
+    return base + F.MARKET_FEATURES
+
+
 def build_dataset(conn, timeframe: str, model: str, tickers=None) -> pd.DataFrame:
-    """Junta features + rotulo para todos os tickers de um timeframe."""
-    tickers = tickers or config.PATTERN_TICKERS
+    """Junta features + contexto de mercado + rotulo, para todos os tickers."""
+    tickers = tickers or config.TREE_TICKERS
     builder = F.indicator_features if model == "indicators" else F.microstructure_features
+    benchmark = load_bars(conn, config.BENCHMARK["ticker"], timeframe)
 
     frames = []
     for ticker in tickers:
         bars = load_bars(conn, ticker, timeframe)
         if len(bars) < 200:
             continue
-        matrix = builder(bars)
+        matrix = builder(bars).join(F.market_context_features(bars, benchmark))
         labels = F.label_three_class(bars)
         frame = matrix.join(labels)
         frame["ticker"] = ticker
@@ -93,7 +103,8 @@ def actionable_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
         return {"action_rate": 0.0, "action_precision": None,
                 "action_precision_baseline": None, "action_precision_lift": None,
                 "up_precision": None, "down_precision": None,
-                "up_base_rate": None, "down_base_rate": None, "reversal_rate": None}
+                "up_base_rate": None, "down_base_rate": None, "reversal_rate": None,
+                "move_detection": None, "move_base_rate": None, "direction_accuracy": None}
 
     correct = (y_pred[acted] == y_true[acted]).sum()
     up = y_pred == F.UP
@@ -104,6 +115,21 @@ def actionable_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     # acertaria a taxa-base de SOBE. Sem esta comparacao, "acerta 35%" nao se
     # sabe se e' bom ou mau -- com tres classes desequilibradas, 35% pode ser
     # otimo (se SOBE for 28% das barras) ou pessimo.
+    # DECOMPOSICAO -- o diagnostico mais importante deste ficheiro.
+    #
+    # A precisao mistura duas capacidades muito diferentes:
+    #   deteccao de movimento -- acertar que a barra seguinte sai da banda
+    #   acerto de direccao    -- acertar PARA ONDE sai
+    # e precisao = deteccao x direccao. Medido a 1h: 82.0% x 53.5% = 43.8%.
+    # Ou seja, o lift de +20.8pp que parece uma vitoria vem quase todo de
+    # prever VOLATILIDADE (clustering de volatilidade e' real e forte), e nao
+    # de prever direccao, que fica em 53.5% -- dentro do ruido. Sem esta
+    # separacao, o numero de topo seria lido como algo que nao e'.
+    truly_moved = y_true[acted] != F.WAIT
+    move_detection = float(truly_moved.mean())
+    direction_accuracy = (float((y_pred[acted][truly_moved] == y_true[acted][truly_moved]).mean())
+                          if truly_moved.any() else None)
+
     base_up = float((y_true == F.UP).mean())
     base_down = float((y_true == F.DOWN).mean())
     base_acted = ((base_up * up.sum() + base_down * down.sum()) / n_acted) if n_acted else 0.0
@@ -112,6 +138,9 @@ def actionable_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
         "action_rate": n_acted / len(y_pred),
         "action_precision": precision,
         "action_precision_baseline": base_acted,
+        "move_detection": move_detection,
+        "move_base_rate": float((y_true != F.WAIT).mean()),
+        "direction_accuracy": direction_accuracy,
         "action_precision_lift": precision - base_acted,
         "up_precision": float((y_true[up] == F.UP).mean()) if up.any() else None,
         "down_precision": float((y_true[down] == F.DOWN).mean()) if down.any() else None,
@@ -126,13 +155,44 @@ def actionable_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     }
 
 
+def precision_coverage_curve(probabilities: np.ndarray, y_true: np.ndarray) -> list:
+    """Precisao em funcao do limiar de confianca.
+
+    E' a forma legitima de subir a precisao: em vez de escolher sempre a classe
+    de maior probabilidade, so' se decide quando essa probabilidade passa um
+    limiar -- caso contrario responde-se ESPERAR. Age-se menos vezes e melhor.
+    Isto nao e' truque: a cobertura desce a par, e as duas sao reportadas
+    juntas para que ninguem leia a precisao sozinha."""
+    curve = []
+    for threshold in (0.34, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70):
+        best_class = probabilities.argmax(axis=1)
+        best_probability = probabilities.max(axis=1)
+        acted = (best_class != F.WAIT) & (best_probability >= threshold)
+        n_acted = int(acted.sum())
+        if n_acted < 30:
+            curve.append({"threshold": threshold, "coverage": n_acted / len(y_true),
+                          "n": n_acted, "precision": None, "lift": None})
+            continue
+        precision = float((best_class[acted] == y_true[acted]).mean())
+        # Baseline: se dissesse a mesma coisa ao calhas, acertava a taxa-base
+        # da classe que escolheu. Pondera-se pelas classes efectivamente ditas.
+        n_up = int((best_class[acted] == F.UP).sum())
+        n_down = n_acted - n_up
+        base_matched = ((n_up * (y_true == F.UP).mean()
+                         + n_down * (y_true == F.DOWN).mean()) / n_acted)
+        curve.append({
+            "threshold": threshold, "coverage": n_acted / len(y_true), "n": n_acted,
+            "precision": precision, "lift": precision - base_matched,
+        })
+    return curve
+
+
 def train_one(conn, timeframe: str, model: str) -> dict | None:
     frame = build_dataset(conn, timeframe, model)
     if frame.empty:
         return None
 
-    feature_names = (F.INDICATOR_FEATURES if model == "indicators"
-                     else F.microstructure_feature_names())
+    feature_names = feature_names_for(model)
     train_df, validation_df, test_df = split_by_time(frame, T["horizon_bars"])
     if len(train_df) < T["min_train_rows"] or validation_df.empty or test_df.empty:
         return None
@@ -180,6 +240,7 @@ def train_one(conn, timeframe: str, model: str) -> dict | None:
 
     accuracy = float((test_predictions == y_test.values).mean())
     metrics = actionable_metrics(y_test.values, test_predictions)
+    curve = precision_coverage_curve(final.predict_proba(X_test), y_test.values)
 
     majority = int(y_train.mode().iloc[0])
     baseline = float((y_test.values == majority).mean())
@@ -209,7 +270,7 @@ def train_one(conn, timeframe: str, model: str) -> dict | None:
         "class_distribution": {F.CLASS_NAMES[k]: float(v) for k, v in
                                y_test.value_counts(normalize=True).sort_index().items()},
         "top_features": [(name, float(value)) for name, value in importances],
-        "sweep": sweep,
+        "sweep": sweep, "precision_curve": curve,
         **metrics,
     }
 
@@ -222,20 +283,23 @@ def store(conn, result: dict) -> str:
              (version, model_kind, timeframe, max_depth, trained_at, n_train, n_validation,
               n_test, n_features, effective_days, accuracy, baseline_majority, baseline_class,
               action_rate, action_precision, action_precision_baseline, action_precision_lift,
+              move_detection, move_base_rate, direction_accuracy,
               up_precision, down_precision, up_base_rate, down_base_rate, reversal_rate,
               standard_error, significant, latency_ms, class_distribution_json,
-              top_features_json, sweep_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+              top_features_json, sweep_json, precision_curve_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (version, result["model"], result["timeframe"], result["max_depth"],
          datetime.now(timezone.utc).isoformat(), result["n_train"], result["n_validation"],
          result["n_test"], result["n_features"], result["effective_days"], result["accuracy"],
          result["baseline_majority"], result["baseline_class"], result["action_rate"],
          result["action_precision"], result["action_precision_baseline"],
-         result["action_precision_lift"], result["up_precision"], result["down_precision"],
+         result["action_precision_lift"], result["move_detection"], result["move_base_rate"],
+         result["direction_accuracy"], result["up_precision"], result["down_precision"],
          result["up_base_rate"], result["down_base_rate"],
          result["reversal_rate"], result["standard_error"], int(result["significant"]),
          result["latency_ms"], json.dumps(result["class_distribution"]),
-         json.dumps(result["top_features"]), json.dumps(result["sweep"])),
+         json.dumps(result["top_features"]), json.dumps(result["sweep"]),
+         json.dumps(result["precision_curve"])),
     )
     conn.commit()
     return version
@@ -260,10 +324,22 @@ def _report(result: dict) -> None:
         print(f"  DECIDE em {result['action_rate']:.1%} das barras; quando decide acerta "
               f"{precision:.1%}  (ao calhas seria {result['action_precision_baseline']:.1%} "
               f"-> lift {lift:+.1f}pp)")
+        print(f"     DECOMPOSICAO: deteccao de movimento {result['move_detection']:.1%} "
+              f"(base {result['move_base_rate']:.1%})  x  direccao "
+              f"{result['direction_accuracy']:.1%} (acaso 50%)  = {precision:.1%}")
         print(f"     SOBE: {(result['up_precision'] or 0):.1%} vs base {result['up_base_rate']:.1%}   "
               f"DESCE: {(result['down_precision'] or 0):.1%} vs base {result['down_base_rate']:.1%}   "
               f"inversoes graves: {result['reversal_rate']:.1%}")
     print(f"  top features: {', '.join(n for n, _ in result['top_features'][:5])}")
+    print(f"  curva precisao/cobertura (decidir so' acima do limiar):")
+    print(f"    {'limiar':>7} {'cobertura':>10} {'precisao':>9} {'lift':>8} {'n':>7}")
+    for point in result["precision_curve"]:
+        if point["precision"] is None:
+            print(f"    {point['threshold']:>7.2f} {point['coverage']:>9.1%} "
+                  f"{'--':>9} {'--':>8} {point['n']:>7,}")
+        else:
+            print(f"    {point['threshold']:>7.2f} {point['coverage']:>9.1%} "
+                  f"{point['precision']:>8.1%} {point['lift']*100:>+7.1f}pp {point['n']:>7,}")
     print(f"  {'profundidade':>12} {'accuracy':>9} {'precisao':>9} {'decide':>8} "
           f"{'treino(s)':>10} {'ms/linha':>9} {'nos':>8}")
     for step in result["sweep"]:

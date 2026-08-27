@@ -505,6 +505,116 @@ dizem o mesmo e nenhum diz ESPERAR — duas leituras diferentes do mesmo gráfic
 a concordarem valem mais do que qualquer uma sozinha. Latência de inferência:
 **0,0007–0,0015 ms por linha**, folgadíssimo para tempo real.
 
+### O resultado mais forte do projeto — e o que ele realmente significa
+
+Depois de alargar para **161 tickers**, acrescentar **contexto de mercado** (relação
+com o índice: beta, correlação, retorno em excesso, força relativa) e treinar
+também em **1h** (onde há 741 dias de calendário em vez de 7):
+
+**Indicadores @ 1h — 473.097 linhas de treino, 146 dias efectivos no teste:**
+decide em 14,3% das barras e acerta **43,8%**, contra uma taxa-base de 23,0%.
+São **+20,8 pp com erro-padrão de ±4,1 pp — cinco erros-padrão.** O primeiro
+resultado estatisticamente significativo de todo o projeto.
+
+A curva de precisão/cobertura é monotónica, que é a assinatura de sinal real
+(ruído daria curva plana):
+
+| Limiar | Cobertura | Precisão | Lift |
+|---|---|---|---|
+| 0,34 | 14,2% | 43,9% | +20,8 pp |
+| 0,40 | 10,6% | 45,6% | +22,5 pp |
+| 0,45 | 2,8% | 48,7% | +25,6 pp |
+| 0,50 | 0,1% | **59,8%** | +36,8 pp |
+
+#### Mas a decomposição muda o que isto quer dizer
+
+As features de topo são quase todas de **volatilidade e volume** (`vol_20`,
+`atr14_norm`, `volume_z20`, `bb_width`), não direcionais. Isso levantou uma
+hipótese que teve de ser testada, e confirmou-se:
+
+| Componente | Valor | Base |
+|---|---|---|
+| P(houve mesmo movimento \| modelo decidiu) | **82,0%** | 46,0% |
+| P(direção certa \| houve movimento) | **53,5%** | 50% |
+| **Produto = precisão** | **43,8%** | |
+
+**O modelo é excelente a prever _que_ vai haver movimento** — +36 pp sobre a
+taxa-base, muito para lá do ruído. Isso é *clustering de volatilidade*, um
+efeito bem documentado e genuinamente forte.
+
+**Mas a direção fica em 53,5%** — +3,5 pp contra ±4,1 pp de erro-padrão, ou
+seja **dentro do ruído**.
+
+Os +20,8 pp que pareciam uma vitória são quase todos previsão de
+**volatilidade**, não de **direção**. Ler a precisão sem esta separação seria
+confundir as duas coisas — por isso a decomposição é agora uma métrica de
+primeira classe, gravada na BD e destacada na página.
+
+Isto não é um resultado inútil: saber que vem movimento é acionável para
+dimensionamento de posição e gestão de risco. Só não é o mesmo que saber para
+onde.
+
+### Mudar o alvo: magnitude em vez de direção
+
+`src/trees/magnitude.py`. Se o sinal é de magnitude, o alvo deve ser magnitude.
+Dois alvos sobre exatamente as mesmas features:
+
+- **Classificação** — `big_move`: o movimento sai da banda de indiferença?
+- **Regressão** — `magnitude_ratio`: vale quantos desvios-padrão recentes?
+  Diz **quanto**, não apenas **se**.
+
+A baseline exigente aqui não é a classe maioritária: é a **persistência de
+volatilidade** (uma única feature). A volatilidade é fortemente
+autocorrelacionada, portanto qualquer modelo tem obrigação de bater isso —
+senão as 40 features não acrescentam nada a uma regra de uma linha.
+
+| Modelo | TF | Accuracy | Base | AUC | vs baseline vol | Spearman | Decil topo/fundo | Dias |
+|---|---|---|---|---|---|---|---|---|
+| **Indicadores** | **1h** | **66,7%** | 54,0% | **0,728** | 0,578 | **+0,466** | **9,04×** | 146 |
+| Forma da janela | 1h | 59,0% | 54,0% | 0,624 | 0,578 | +0,191 | 2,37× | 146 |
+| Indicadores | 5m | 60,6% | 54,3% | 0,646 | 0,555 | +0,326 | 5,90× | 14 |
+| Indicadores | 1m | 59,7% | 57,7% | 0,596 | 0,457 | +0,214 | 2,51× | **2** |
+
+**Indicadores @ 1h: +12,7 pp sobre a base com erro-padrão de ±4,1 pp — 3,1
+desvios, estatisticamente significativo.** E bate a persistência de
+volatilidade por 0,15 de AUC, o que prova que as features acrescentam mesmo
+informação além de "esteve volátil, continua volátil".
+
+#### A calibração é o mais notável
+
+Ordenando as barras pela magnitude prevista, o previsto e o realizado
+acompanham-se quase exatamente:
+
+| Decil | Previsto | Realizado |
+|---|---|---|
+| 1 | 0,27 | 0,28 |
+| 5 | 0,51 | 0,51 |
+| 8 | 0,74 | 0,75 |
+| 9 | 1,09 | 1,21 |
+| 10 | 2,17 | 2,50 |
+
+**O decil de topo move-se 9× mais que o de baixo.** Não é só ordenar bem — os
+valores estão certos. (Ligeira subestimação nos extremos, o que é o
+comportamento habitual de modelos de regressão em caudas.)
+
+E a curva de cobertura permite escolher o compromisso:
+
+| Limiar | Cobertura | Precisão | Lift |
+|---|---|---|---|
+| 0,50 | 35,5% | 67,8% | +21,9 pp |
+| 0,70 | 13,0% | 83,0% | +37,0 pp |
+| 0,80 | 7,0% | **85,9%** | +39,9 pp |
+
+#### O que isto é e o que não é
+
+É um bom preditor de **volatilidade a uma hora**, com utilidade real:
+dimensionamento de posição, gestão de risco, e sobretudo opções, onde a
+volatilidade é o que se negoceia diretamente.
+
+**Não diz para que lado.** Nada aqui contradiz o resultado anterior — a
+direção continua a ~53%, dentro do ruído. O que mudou foi medir a coisa certa
+em vez de dar à direção o crédito da volatilidade.
+
 ## Testes
 
 ```bash
@@ -549,6 +659,7 @@ src/trees/              ARVORES DE DECISAO (XGBoost, 3 classes com ESPERAR)
   features.py           indicadores tecnicos + forma da janela + rotulo de 3 classes
   train.py              treino, varrimento de profundidade, metricas accionaveis
   live.py               inferencia ao vivo dos dois modelos + consenso
+  magnitude.py          alvo de magnitude (classificacao + regressao)
   live.py               deteccao + previsao em tempo real (<100ms, matriz em cache)
   backfill.py           redeteccao completa do historico
   run_patterns.py       ciclo completo, corre a seguir ao pipeline diario
