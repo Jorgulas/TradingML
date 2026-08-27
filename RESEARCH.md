@@ -502,6 +502,101 @@ programa. E, ao contrário de tudo o resto, corrigir o bug tornou-o mais forte.
 Os resultados mantêm-se — as outras 7 faixas estavam correctas — mas as "8
 dummies" eram na prática 7 úteis e uma inútil.)*
 
+
+---
+
+## Ronda 6 — Dados novos (resultados trimestrais) e modelar a cauda
+
+Duas linhas em paralelo: um **dado novo** que faltava, e uma **ideia minha**
+nascida de um diagnóstico.
+
+**Sobre fóruns:** verifiquei e **não consigo aceder**. A API do Reddit exige
+credenciais OAuth que não tenho e o StockTwits fechou a pública. Não vou
+reportar o que não testei. Mas o yfinance dá **calendário de resultados**, que
+é mais directamente relevante ao que a ronda 3 diagnosticou: 160 tickers,
+**14.878 datas**, média de 93 por empresa.
+
+### A hipótese da ronda 3 está confirmada
+
+| | Taxa de eventos de cauda (\|r\| > 3× esperado) |
+|---|---|
+| Dias de resultados (8,4% dos dias) | **11,49%** |
+| Dias normais | 3,01% |
+| Rácio | **3,81×** |
+
+Surpresa média: **1,502** em dias de resultados contra **0,994** em dias
+normais — este último exactamente 1,0, como deveria. O "lucro" da ronda 3 era
+o efeito dos resultados, que o mercado de opções obviamente cobra.
+
+### O achado que reescreve a ronda 4
+
+| Features | AUC a prever cauda |
+|---|---|
+| **Só volatilidade recente (1)** | **0,5071** |
+| Só calendário de resultados (4) | 0,6290 |
+| Modelo completo sem resultados (48) | 0,6168 |
+| **Modelo completo + resultados (52)** | **0,6633** |
+
+**A volatilidade recente é inútil para prever caudas — AUC 0,507, acaso puro.**
+
+Isto explica a ronda 4. Lá dimensionei posições pelo inverso da volatilidade
+recente e por um modelo que correlacionava 0,78 com ela. Nenhum tinha poder
+sobre caudas, e as caudas é que produzem drawdowns. **Estava a medir a coisa
+certa com o preditor errado.**
+
+Note-se também: **4 features de calendário batem 48 features técnicas** (0,629
+vs 0,617). Mas combinadas dão 0,663 — o modelo *sabe* algo além do calendário,
++0,034 de AUC.
+
+### A minha ideia: modelar a cauda, não a escala
+
+O diagnóstico: o decil de topo tinha mediana 0,975 (normal) mas 2,98× mais
+extremos. Isso não é mudança de escala — é mudança na **espessura da cauda**. E
+eu treinava com erro quadrático, que ajusta a **média condicional**.
+
+| Alvo treinado | AUC na cauda | Lift no decil |
+|---|---|---|
+| Escala E[\|r\|] | 0,6543 | 2,88× |
+| Quantil Q90 | 0,6450 | 3,00× |
+| **Cauda P(\|r\|>3×)** | **0,6633** | **3,07×** |
+
+**A hipótese estava certa mas o efeito é modesto**: +0,009 de AUC sobre a
+regressão de escala. Não estava a subestimar dramaticamente o modelo, como
+suspeitei — estava a subestimá-lo um pouco.
+
+### Dimensionar pela cauda: o primeiro resultado *promissor mas não provado*
+
+| Esquema | Vol anual | Pior dia | VaR 99% | 5 piores | Drawdown |
+|---|---|---|---|---|---|
+| Inverso da volatilidade (grátis) | 6,91% | −1,05% | −0,95% | −0,91% | −3,82% |
+| **Inverso do risco de cauda** | **6,78%** | **−1,04%** | **−0,89%** | **−0,80%** | **−1,70%** |
+
+**Todas as métricas favorecem o modelo de cauda.** O drawdown cai 55%.
+
+Mas testado formalmente no CVaR 5% (mais estável que o VaR pontual):
+
+| | |
+|---|---|
+| Melhoria | **+0,116 pp** |
+| IC95% | [−0,085%, +0,270%] |
+| **Efeito mínimo detectável com 114 dias** | **0,181 pp** |
+
+**O observado é 64% do necessário para significância.**
+
+### Porque é que esta ronda é diferente
+
+Nas cinco rondas anteriores, sempre que um número parecia bom houve uma
+explicação que o desmontou — o relógio, a mudança de regime, a mediana, a
+correlação com a baseline. **Aqui não houve.** O efeito é consistente em
+direcção nas cinco métricas de cauda e nenhuma inspecção o explicou.
+
+O que falta é **poder estatístico**: seriam precisos **~278 dias de teste**
+(1,1 anos) contra os 114 disponíveis — o que implica ~5,5 anos de histórico
+total, e eu tenho 2,0.
+
+É a diferença entre *"mostrou-se ausente"* e *"não se conseguiu provar"*. Todas
+as conclusões negativas anteriores eram do primeiro tipo. Esta é do segundo.
+
 ---
 
 # Síntese do programa de investigação
