@@ -367,3 +367,111 @@ Como sinal de compra de volatilidade, falha. Como alarme de risco, funciona.
 - A sazonalidade intradiária é estável mês a mês, ou precisa de reestimação?
 - O sinal residual é transversal (esta acção move-se mais que as outras) ou
   temporal (todas ao mesmo tempo)?
+
+
+---
+
+## Ronda 4 — O alarme de risco reduz a variância da carteira?
+
+**Pergunta.** O modelo detecta risco de cauda 2,98× melhor que o acaso. Como
+sinal de compra de volatilidade falhou, mas dimensionar posições não paga
+spread nem prémio de risco. Serve para isso?
+
+**Desenho.** A comparação justa **não** é contra pesos iguais — é contra
+dimensionar pelo inverso da volatilidade recente, que é prática corrente e não
+custa nada. Exposição idêntica em todos os esquemas (pesos somam 1), senão
+reduzir variância seria trivial: bastava investir menos.
+
+### Resultado: não acrescenta nada
+
+| Esquema | Vol anual | Pior dia | VaR 99% | Drawdown |
+|---|---|---|---|---|
+| Pesos iguais | 6,83% | −1,38% | −1,04% | −2,64% |
+| **Inverso da vol recente (grátis)** | 6,91% | −1,05% | −0,95% | −3,82% |
+| Inverso da vol prevista (modelo) | 6,86% | −1,01% | −0,97% | −3,30% |
+| Combinação | 6,88% | −1,03% | −0,96% | −3,55% |
+
+Diferença de volatilidade diária entre modelo e referência gratuita:
+**−0,00003, IC95% [−0,00011, +0,00004]** — contém zero.
+
+### Testei a minha própria desculpa, e estava errada
+
+Hipótese óbvia: com 158 acções o risco idiossincrático está diversificado, e o
+modelo prevê exactamente isso. Num portfólio concentrado devia ajudar.
+
+| Nº de acções | Vol grátis | Vol modelo | Diferença |
+|---|---|---|---|
+| 5 | 15,32% | 15,35% | **+0,030%** (pior) |
+| 10 | 11,89% | 11,87% | −0,027% |
+| 20 | 9,50% | 9,46% | −0,040% |
+| 50 | 7,81% | 7,76% | −0,053% |
+| 158 | 6,91% | 6,86% | −0,048% |
+
+**A hipótese está rejeitada.** A diferença é constante em todas as dimensões, e
+a 5 acções o modelo é ligeiramente *pior*.
+
+### Porquê — a explicação mecânica
+
+| | |
+|---|---|
+| Correlação risco previsto vs volatilidade recente | **0,78** |
+| Correlação entre os pesos resultantes | **0,86** |
+| Diferença média de peso | 11,8% do peso médio |
+
+A previsão do modelo é **dominada pelo nível de volatilidade recente**, que já
+estava na referência gratuita. A informação incremental — a componente de
+surpresa — é real, mas pequena demais em magnitude para mover os pesos de forma
+útil.
+
+### Conclusão da ronda 4
+
+**O alarme de risco não reduz a variância da carteira**, em nenhuma dimensão de
+portfólio, face ao que a volatilidade recente já dá de graça. Fecha a última
+aplicação em aberto.
+
+---
+
+# Síntese do programa de investigação
+
+Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
+a inspecção mais fina que o explicou.**
+
+| Ronda | O que parecia | O que era |
+|---|---|---|
+| 1 | Magnitude prevista com Spearman 0,47 e lift de 9× | 74% era saber a hora do dia; 12 parâmetros lineares fazem 96% |
+| 2 | +76% de lucro no decil de topo | Mudança de regime; corrigido, sobra +13% do prémio |
+| 3 | Média 1,30 bate o equilíbrio de 1,11 | **Mediana 0,975** — o trade típico perde; o lucro está em 5% de eventos que as opções já cobram |
+| 4 | Alarme de risco 2,98× melhor que o acaso | Não reduz variância nenhuma; a previsão correlaciona 0,78 com a volatilidade recente |
+
+## O que ficou estabelecido
+
+**Negativo, com solidez:**
+
+1. **A direcção não é previsível.** Seis modelos entre 49,1% e 53,5%; 13
+   regimes testados com correcção de Bonferroni, nenhum sobrevive.
+2. **O ML não bate o HAR-RV a prazo diário.** Empate técnico (+0,008) entre 40
+   features com XGBoost e 4 coeficientes lineares.
+3. **Nada aqui é negociável.** Nem por opções (o lucro está em eventos já
+   cobrados), nem por execução (uma regra de relógio ganha), nem por
+   dimensionamento (a volatilidade recente já dá tudo).
+
+**Positivo, e real:**
+
+4. **A volatilidade é previsível** — mas sobretudo por sazonalidade
+   intradiária, e isso já se sabia há décadas.
+5. **Existe sinal residual genuíno** depois de tirar calendário e inércia:
+   Spearman 0,17 a 1h, IC95% [0,153, 0,185].
+6. **O modelo detecta eventos de cauda** 2,98× melhor que o acaso.
+
+O ponto 6 é competência real que não se converteu em valor em nenhuma das três
+aplicações testadas. Isso não o torna falso — torna-o insuficiente.
+
+## O que este projecto realmente demonstra
+
+Não é um sistema de trading. É um **aparelho de medição honesto**: protocolo de
+três partições com embargo, erros-padrão sobre dias e não sobre linhas,
+correcção para testes múltiplos, verificações de calibração, e comparação
+sistemática contra a alternativa gratuita mais simples.
+
+Foi esse aparelho que apanhou, uma a uma, quatro conclusões erradas que eu
+próprio tinha produzido. O valor está aí.
