@@ -411,6 +411,40 @@ CREATE TABLE IF NOT EXISTS live_predictions (
     UNIQUE (session_id, ticker, predicted_at_ts)
 );
 
+-- Arvores de decisao (XGBoost), tres classes: DESCE / ESPERAR / SOBE.
+-- action_precision e' a metrica que decide, nao a accuracy: com ESPERAR a ser
+-- ~42% das linhas, responder sempre ESPERAR da' 42% de accuracy e e' inutil.
+CREATE TABLE IF NOT EXISTS tree_models (
+    version                 TEXT PRIMARY KEY,
+    model_kind              TEXT NOT NULL CHECK (model_kind IN ('indicators', 'microstructure')),
+    timeframe               TEXT NOT NULL,
+    max_depth               INTEGER NOT NULL,
+    trained_at              TEXT NOT NULL,
+    n_train                 INTEGER NOT NULL,
+    n_validation            INTEGER NOT NULL,
+    n_test                  INTEGER NOT NULL,
+    n_features              INTEGER NOT NULL,
+    effective_days          INTEGER NOT NULL,
+    accuracy                REAL,
+    baseline_majority       REAL,
+    baseline_class          TEXT,
+    action_rate             REAL,
+    action_precision        REAL,
+    action_precision_baseline REAL,
+    action_precision_lift   REAL,
+    up_precision            REAL,
+    down_precision          REAL,
+    up_base_rate            REAL,
+    down_base_rate          REAL,
+    reversal_rate           REAL,
+    standard_error          REAL,
+    significant             INTEGER,
+    latency_ms              REAL,
+    class_distribution_json TEXT,
+    top_features_json       TEXT,
+    sweep_json              TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_tf ON intraday_prices(ticker, timeframe, ts);
 CREATE INDEX IF NOT EXISTS idx_pattern_outcomes ON pattern_outcomes(timeframe, horizon_bars, confirmed_ts);
 CREATE INDEX IF NOT EXISTS idx_live_predictions ON live_predictions(session_id, resolved, resolve_at_ts);

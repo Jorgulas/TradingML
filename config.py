@@ -160,6 +160,10 @@ MIN_TRAIN_ROWS = 60  # minimo de linhas rotuladas antes de treinar um modelo rea
 PATTERN_TIMEFRAMES = {
     "1h": {"yf_period": "730d", "yf_interval": "1h", "pivot_window": 5},
     "5m": {"yf_period": "60d", "yf_interval": "5m", "pivot_window": 3},
+    # 1m e 2m servem as arvores de decisao (src/trees), nao a deteccao de
+    # padroes. Dados ao SEGUNDO nao existem: o yfinance rejeita interval=1s.
+    "2m": {"yf_period": "60d", "yf_interval": "2m", "pivot_window": 3},
+    "1m": {"yf_period": "7d", "yf_interval": "1m", "pivot_window": 2},
 }
 PATTERN_LIVE_TIMEFRAME = "5m"   # o que a pagina web usa por omissao
 
@@ -336,4 +340,45 @@ PATTERN_REALTIME = {
     # historico. E' isto que faz a margem de acerto mexer "enquanto aprende".
     "online_learning": True,
     "online_learning_rate": 0.01,
+}
+
+
+# ---------------------------------------------------------------------------
+# Arvores de decisao (XGBoost) -- tres classes: SOBE / DESCE / ESPERAR
+# ---------------------------------------------------------------------------
+TREES = {
+    # Dados ao SEGUNDO nao existem no yfinance (rejeita interval=1s). O mais
+    # fino e' 1m, mas so' da' 7 dias de calendario: muitas linhas (117 mil) e
+    # pouquissimos dias efectivos. 5m da' 60 dias. Treinam-se os dois e
+    # reporta-se a diferenca, porque sao as linhas que alimentam a capacidade
+    # da arvore mas sao os DIAS que dao poder estatistico.
+    "timeframes": ["1m", "5m"],
+    "horizon_bars": 1,          # prever a barra seguinte
+    "window_bars": 10,          # janela do modelo B ("ultimos 10 minutos")
+
+    # Banda de indiferenca que define ESPERAR. Escalada pela volatilidade
+    # recente e nao fixa: 5 pontos base sao muito num minuto calmo e nada num
+    # agitado, e uma banda fixa daria quase so' ESPERAR nuns tickers e quase
+    # nenhum noutros.
+    "band_k": 0.5,
+    "band_vol_window": 20,
+
+    "train_fraction": 0.6,
+    "validation_fraction": 0.2,
+    "min_train_rows": 2000,
+
+    # Varrimento de profundidade. Serve para testar a hipotese "mais detalhado
+    # = mais lento mas mais preciso" com numeros em vez de intuicao.
+    "depth_sweep": [2, 3, 4, 6, 8, 10],
+    "xgb_params": {
+        "n_estimators": 300,
+        "learning_rate": 0.06,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 1.0,
+        "objective": "multi:softprob",
+        "num_class": 3,
+        "tree_method": "hist",
+        "random_state": 42,
+    },
 }

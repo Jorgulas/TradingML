@@ -5,6 +5,7 @@ evita problemas de concorrencia de escrita no SQLite).
 Uso: py web/app.py   (depois abrir http://localhost:5000)
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -236,6 +237,43 @@ def api_pattern_bars(ticker):
 @app.route("/live")
 def live_page():
     return render_template("live.html")
+
+
+@app.route("/trees")
+def trees_page():
+    return render_template("trees.html", tickers=config.PATTERN_TICKERS,
+                           timeframes=config.TREES["timeframes"])
+
+
+@app.route("/api/trees/models")
+def api_trees_models():
+    from src.trees import live as trees_live
+
+    models = trees_live.model_summary(get_db())
+    for model in models:
+        for field in ("class_distribution_json", "top_features_json", "sweep_json"):
+            if model.get(field):
+                model[field.replace("_json", "")] = json.loads(model.pop(field))
+    return jsonify({"models": models})
+
+
+@app.route("/api/trees/decisions")
+def api_trees_decisions():
+    from src.trees import live as trees_live
+
+    timeframe = request.args.get("timeframe", config.TREES["timeframes"][0])
+    if timeframe not in config.TREES["timeframes"]:
+        return jsonify({"error": f"timeframe desconhecido: {timeframe}"}), 400
+
+    requested = request.args.get("tickers")
+    tickers = ([t for t in requested.split(",") if t in config.PATTERN_TICKERS]
+               if requested else config.TICKERS)
+
+    conn = get_db()
+    return jsonify({
+        "timeframe": timeframe,
+        "decisions": [trees_live.predict_both(conn, ticker, timeframe) for ticker in tickers],
+    })
 
 
 @app.route("/api/live/state")

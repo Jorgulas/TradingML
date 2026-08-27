@@ -424,6 +424,87 @@ arrancando dos coeficientes do modelo treinado nos ~1.900 exemplos históricos.
 6 barras (30 min) — a 1h cada previsão demoraria 5 horas a resolver e não havia
 nada para ver.
 
+## Árvores de decisão (XGBoost) — três classes com "esperar"
+
+`src/trees/` + página **`/trees`**.
+
+```bash
+py src/trees/train.py      # treina os 4 modelos com varrimento de profundidade
+py src/trees/live.py       # decisões agora, por ticker
+```
+
+Duas árvores sobre a **mesma** janela de tempo, a descrevê-la de maneiras
+diferentes:
+
+- **Indicadores** (30 features) — médias móveis, MACD, RSI, Bollinger, ATR,
+  volume, volatilidade. A leitura "de analista".
+- **Forma da janela** (28 features) — sem indicador nenhum. Conta quantos dos
+  últimos 10 movimentos foram positivos/negativos, mede a **inércia** (corrida
+  atual no mesmo sentido), a média, o desvio **inicial** e **final**, o declive
+  e a aceleração — e recebe o sinal de cada barra como feature própria
+  (`sign_lag1..sign_lag10`), que é como se dá a sequência `+ + − + − −` a uma
+  árvore para ela ramificar.
+
+**"Esperar" é uma decisão a sério**, não um caixote de restos: quando o
+movimento seguinte cabe dentro de uma banda escalada pela volatilidade
+recente, não agir é a resposta certa. A banda é adaptativa e não fixa — 5
+pontos base são muito num minuto calmo e nada num agitado. Distribuição
+resultante: **DESCE 28,9% / ESPERAR 42,4% / SOBE 28,7%**.
+
+### A métrica que decide não é a accuracy
+
+Com ESPERAR a ser ~42% das barras, responder sempre ESPERAR dá 42% de accuracy
+e **nunca actua**. O número que interessa é a **precisão quando o modelo se
+atreve a decidir**, comparada com a taxa-base dessa classe:
+
+| Modelo | TF | Decide | Precisão | Ao calhas | **Lift** | Dias efetivos |
+|---|---|---|---|---|---|---|
+| Indicadores | 5m | 15,2% | 39,3% | 27,2% | **+12,1 pp** | 14 |
+| Indicadores | 1m | 19,4% | 35,3% | 28,8% | +6,4 pp | **2** |
+| Forma da janela | 5m | 5,0% | 33,0% | 27,1% | +5,9 pp | 14 |
+| Forma da janela | 1m | 3,2% | 32,7% | 28,8% | +3,9 pp | **2** |
+
+**Os indicadores ganham à forma da janela** por cerca do dobro do lift, nos
+dois timeframes. A forma da janela é bem mais conservadora — só se atreve em
+3-5% das barras.
+
+### "Mais detalhado = mais lento mas mais preciso"? Metade certo
+
+Varrimento de profundidade, medido (indicadores @ 5m):
+
+| Profundidade | Precisão | Decide | Treino | Nós |
+|---|---|---|---|---|
+| 2 | **38,8%** | 13,0% | 2,2s | 6.300 |
+| 4 | 38,0% | 15,7% | 2,9s | 27.432 |
+| 6 | 36,7% | 17,9% | 4,0s | 99.216 |
+| 10 | 35,0% | 23,5% | 11,1s | **747.012** |
+
+**A parte do "mais lento" confirma-se** — 5× mais tempo e **119× mais nós**.
+**A parte do "mais preciso" não** — a precisão *desce* monotonicamente. O mesmo
+padrão aparece nos quatro modelos.
+
+O que a profundidade aumenta mesmo é a **taxa de decisão** (13% → 23,5%): as
+árvores profundas atrevem-se mais e acertam menos. É a assinatura clássica de
+overfitting — mais confiantes e mais erradas. Por isso a escolha da
+profundidade é feita pela **precisão accionável na validação**, e escolheu 2 a
+4 na maioria dos casos.
+
+### Limite honesto: dados ao segundo não existem
+
+O yfinance rejeita `interval=1s` explicitamente. O mais fino é 1m, e só dá
+**7 dias** de calendário. Daí o contraste na tabela: 1m tem 117 mil linhas mas
+**2 dias efectivos no teste** (erro-padrão ±35 pp — nada é mensurável); 5m tem
+14 dias (±13 pp). São as **linhas** que alimentam a capacidade da árvore, mas
+são os **dias** que dão poder estatístico. Nenhum destes lifts está
+estatisticamente estabelecido.
+
+### Consenso entre os dois modelos
+
+A página mostra os dois lado a lado. O **consenso** só se atreve quando ambos
+dizem o mesmo e nenhum diz ESPERAR — duas leituras diferentes do mesmo gráfico
+a concordarem valem mais do que qualquer uma sozinha. Latência de inferência:
+**0,0007–0,0015 ms por linha**, folgadíssimo para tempo real.
+
 ## Testes
 
 ```bash
@@ -449,7 +530,7 @@ src/simulator.py        motor de paper trading
 src/run_daily.py        orquestrador diario (idempotente por data)
 scripts/bootstrap.py    setup inicial do zero (inclui o subsistema de padroes)
 scripts/local_daily_sync.py   o que a tarefa do Windows corre todas as manhas
-web/                    dashboard Flask (so-leitura): / carteiras, /patterns padroes, /live tempo real
+web/                    dashboard Flask (so-leitura): / carteiras, /patterns, /live, /trees
 tests/                  pytest
 
 src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
@@ -463,6 +544,11 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
   direction.py          alvo binario (sobe/desce), embargo, controlo aleatorio
   portfolio.py          terceira carteira: negoceia o sinal de direccao
   realtime.py           forward test ao vivo (modo live + replay) + aprendizagem online
+
+src/trees/              ARVORES DE DECISAO (XGBoost, 3 classes com ESPERAR)
+  features.py           indicadores tecnicos + forma da janela + rotulo de 3 classes
+  train.py              treino, varrimento de profundidade, metricas accionaveis
+  live.py               inferencia ao vivo dos dois modelos + consenso
   live.py               deteccao + previsao em tempo real (<100ms, matriz em cache)
   backfill.py           redeteccao completa do historico
   run_patterns.py       ciclo completo, corre a seguir ao pipeline diario
