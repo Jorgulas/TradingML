@@ -429,6 +429,79 @@ surpresa — é real, mas pequena demais em magnitude para mover os pesos de for
 portfólio, face ao que a volatilidade recente já dá de graça. Fecha a última
 aplicação em aberto.
 
+
+---
+
+## Ronda 5 — A sazonalidade intradiária é estável mês a mês?
+
+**Porque importa.** O "J" intradiário é a única coisa neste projecto que prevê
+de forma fiável — sozinho vale 74% do poder preditivo do modelo de 40 features.
+Se for estável, é a descoberta durável. Se derivar, até ela perde valor.
+
+Dados: 36 meses (2023-09 a 2026-08), 160 tickers, barras de 1h.
+
+### Um bug meu, apanhado antes de concluir
+
+A primeira versão dividia a sessão em 8 faixas por posição normalizada. Mas há
+**7 barras por dia**: as posições 0..6 mapeiam para as faixas 0,1,2,4,5,6,7 e a
+**faixa 3 fica sempre vazia**. Só recebia dados dos raros dias curtos, o que
+produzia 63% de dispersão nessa faixa — ruído de amostra minúscula, não um
+fenómeno.
+
+Corrigido para usar a **hora do dia** directamente (inequívoca em barras
+horárias), o resultado ficou **mais forte**:
+
+| | Com bug | Corrigido |
+|---|---|---|
+| Dispersão por faixa | 5-12%, uma a **63%** | **4,8% a 11,4%** |
+| Amplitude (desvio-padrão) | 4,44× ± **2,01** | 4,09× ± **0,45** |
+| Intervalo da amplitude | 3,08× a **15,86×** | 3,08× a **5,39×** |
+
+O outlier de 15,86× era inteiramente o artefacto.
+
+### Teste 1 — A forma repete-se?
+
+Cada hora varia apenas **4,8% a 11,4%** de mês para mês. Correlação mediana
+entre perfis mensais: **0,79**.
+
+### Teste 2 — Um perfil velho ainda serve? *(o decisivo)*
+
+| Idade do perfil | Spearman | Perda vs oráculo |
+|---|---|---|
+| Oráculo (o próprio mês, impossível) | 0,3078 | — |
+| 1 mês antes | 0,2943 | −4,4% |
+| 3 meses antes | 0,2905 | −5,6% |
+| 6 meses antes | 0,2908 | −5,5% |
+| **12 meses antes** | **0,2931** | **−4,8%** |
+
+**Um perfil de há 12 meses funciona tão bem como o do mês passado.** Não há
+decaimento nenhum com a idade — a perda fica plana em ~5% face a um oráculo
+impossível.
+
+### Teste 3 — Quanto histórico chega?
+
+| Meses usados | Spearman |
+|---|---|
+| 1 | 0,2943 |
+| 6 | 0,2983 |
+| 12 | 0,3045 |
+
+Um ano de histórico chega para desempenho praticamente de oráculo.
+
+### Conclusão da ronda 5
+
+**A sazonalidade intradiária é notavelmente estável.** Estima-se uma vez com um
+ano de dados e serve indefinidamente: a forma varia menos de 12% por hora, a
+amplitude é 4,09× ± 0,45, e um perfil com um ano de idade não perde nada face
+a um recém-estimado.
+
+É o **primeiro resultado inequivocamente positivo e durável** de todo o
+programa. E, ao contrário de tudo o resto, corrigir o bug tornou-o mais forte.
+
+*(Nota: as rondas C, D e E usaram o esquema de 8 faixas com a faixa 3 vazia.
+Os resultados mantêm-se — as outras 7 faixas estavam correctas — mas as "8
+dummies" eram na prática 7 úteis e uma inútil.)*
+
 ---
 
 # Síntese do programa de investigação
@@ -457,8 +530,9 @@ a inspecção mais fina que o explicou.**
 
 **Positivo, e real:**
 
-4. **A volatilidade é previsível** — mas sobretudo por sazonalidade
-   intradiária, e isso já se sabia há décadas.
+4. **A volatilidade é previsível** por sazonalidade intradiária — e essa
+   sazonalidade é **estável**: um perfil de há 12 meses funciona tão bem como
+   um do mês passado (ronda 5). É a descoberta durável do projecto.
 5. **Existe sinal residual genuíno** depois de tirar calendário e inércia:
    Spearman 0,17 a 1h, IC95% [0,153, 0,185].
 6. **O modelo detecta eventos de cauda** 2,98× melhor que o acaso.
