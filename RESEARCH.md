@@ -159,3 +159,103 @@ onde a vantagem sobre o HAR é real (+0,038 de Spearman).
   mudar, o modelo linear precisa de reestimação frequente.
 - O sinal residual é **transversal** (uma acção move-se mais que as outras) ou
   **temporal** (todas se movem mais ao mesmo tempo)? São explorações diferentes.
+
+
+---
+
+## Ronda 2 — O sinal residual sobrevive a custos?
+
+**Pergunta.** O sinal residual (Spearman 0,17, significativo) existe. Mas um
+sinal de **magnitude** não se negoceia direccionalmente — é preciso um
+instrumento que pague pelo tamanho do movimento. Serve para alguma coisa
+depois de custos?
+
+### O que a literatura diz
+
+- **Spreads em large-caps americanas**: ~2-3 pontos base por lado, e estreitam
+  cerca de 4× da abertura para o fecho
+  ([dados de execução](https://frec.com/resources/blog/direct-indexing-transaction-costs)).
+- **Prémio de risco de volatilidade**: a volatilidade implícita excede a
+  realizada **85-90% das vezes**, em média 2-4 pontos percentuais, ou ~**11% do
+  prémio** ([Macrosynergy](https://macrosynergy.com/research/realistic-volatility-risk-premia/),
+  [Alpha Architect](https://alphaarchitect.com/the-variance-risk-premium-is-pervasive/)).
+  Quem **compra** volatilidade paga sistematicamente a mais.
+
+Isto define o teste: o modelo tem de prever surpresa acima de **1,11** só para
+empatar, antes de qualquer custo.
+
+### Erro apanhado a meio (e é grave)
+
+A primeira versão deu **+76% de lucro** no decil de topo. Era falso. A
+verificação de calibração denunciou-o: a surpresa **média** saiu **1,26** em
+vez de 1,00.
+
+Causa: estimei o "movimento esperado" como a média estática do período de
+treino e apliquei-a meses depois. A volatilidade no teste foi 26% mais alta —
+**todo o lucro era mudança de regime**. Um vendedor de opções cota a
+volatilidade *de hoje*.
+
+**Correcção:** movimento esperado = nível corrente (média móvel de 200 barras,
+só a olhar para trás) × forma sazonal (estimada em treino, porque é estrutural).
+A verificação de calibração ficou no código como guarda permanente.
+
+### Teste 1 — sobrevive ao prémio de risco?
+
+| Decil previsto | Surpresa realizada |
+|---|---|
+| 1 (fundo) | 0,719 |
+| 5 | 0,912 |
+| 9 | 1,085 |
+| **10 (topo)** | **1,241** |
+
+Bootstrap por dia (137 dias, 500 reamostragens):
+
+| | |
+|---|---|
+| Surpresa média no topo | **1,2410** |
+| IC95% | **[1,2011, 1,2871]** |
+| Ponto de equilíbrio (1 + prémio) | 1,1100 |
+| **Margem** | **+0,131** (limite inferior do IC: **+0,091**) |
+
+**O sinal sobrevive: o intervalo de confiança está inteiramente acima do
+equilíbrio.** Sobram 9-18% do prémio para custos de transacção.
+
+### Teste 2 — mas há instrumento para o explorar?
+
+**Não a este horizonte.** Não existem opções a uma hora. O prazo mais curto
+realista é diário, e a esta granularidade o sinal teria de ser remedido.
+
+E na única aplicação implementável com acções — **cronometrar a execução para
+reduzir slippage** — o modelo **perde para uma regra gratuita**:
+
+| Estratégia | Movimento médio |
+|---|---|
+| Barra qualquer | 50,9 bps |
+| **Grátis: negociar na faixa mais calma do dia** | **30,9 bps** |
+| Modelo: decil previsto mais calmo | 38,5 bps |
+
+**O modelo é 7,6 bps PIOR do que olhar para o relógio.**
+
+A razão é instrutiva: o modelo prevê **surpresa** (movimento relativo ao
+esperado), mas para execução o que interessa é o **nível absoluto**. Uma barra
+com surpresa baixa no fecho volátil continua a ter volatilidade alta. O modelo
+optimiza a quantidade errada para este uso.
+
+### Conclusões da ronda 2
+
+1. **O sinal é real e sobrevive ao prémio de risco de volatilidade** — margem
+   de +13,1% do prémio, estatisticamente significativa.
+2. **Mas não há instrumento acessível** para o explorar a 1 hora. Opções não
+   existem nesse prazo.
+3. **Para execução, uma regra de relógio bate o modelo.** O sinal é sobre
+   surpresa; a execução depende do nível.
+4. **A verificação de calibração é obrigatória.** Sem ela, uma mudança de
+   regime aparecia como 76% de lucro.
+
+Nem "funciona" nem "não vale nada": **existe um efeito real sem instrumento
+acessível, e na aplicação acessível uma regra mais simples ganha.**
+
+### Ronda 3 — a pergunta que se segue
+
+O sinal só é negociável se sobreviver ao **horizonte diário**, onde existem
+opções. É o teste directo de implementabilidade, e é o próximo passo óbvio.
