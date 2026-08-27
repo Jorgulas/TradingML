@@ -259,3 +259,111 @@ acessível, e na aplicação acessível uma regra mais simples ganha.**
 
 O sinal só é negociável se sobreviver ao **horizonte diário**, onde existem
 opções. É o teste directo de implementabilidade, e é o próximo passo óbvio.
+
+
+---
+
+## Ronda 3 — O horizonte diário, onde as opções existem
+
+**Pergunta.** O sinal só é negociável se sobreviver ao prazo diário. Duas
+razões para esperar pior: desaparece o relógio intradiário (74% do sinal a 1h),
+e o HAR-RV joga em casa — foi desenhado para dados diários.
+
+Dados: 741 dias de barras 1h dos 160 tickers agregadas em barras diárias.
+
+### A vantagem do XGBoost evapora — e isso confirma a ronda 1
+
+| Modelo | Spearman |
+|---|---|
+| HAR-RV (4 médias) | 0,2453 |
+| HAR + dia da semana | 0,2494 |
+| XGBoost (40 features) | 0,2533 |
+
+**+0,008 — empate técnico.** Tirado o relógio, 40 features e XGBoost empatam
+com **4 coeficientes lineares**. E o dia da semana acrescenta 0,004, contra os
++0,20 da hora do dia.
+
+Isto **confirma definitivamente** a hipótese da ronda 1: a vantagem toda do ML
+era sazonalidade intradiária. A literatura tinha razão — a prazo diário, o
+HAR-RV não é batido por machine learning.
+
+### O sinal de surpresa parecia sobreviver…
+
+| | |
+|---|---|
+| Surpresa no decil de topo | 1,2995 |
+| IC95% (bootstrap por dia, 115 dias) | [1,2054, 1,3843] |
+| Equilíbrio (1 + prémio) | 1,1100 |
+| Líquido a 5% de custo de opções | **+0,1395** |
+
+Intervalo inteiramente acima do equilíbrio, lucrativo em todos os cenários de
+custo. Parecia o primeiro resultado do projecto simultaneamente significativo
+**e** com instrumento acessível.
+
+### …mas a mediana desmonta-o
+
+| | |
+|---|---|
+| **Média** do decil de topo | 1,2995 |
+| **Mediana** do decil de topo | **0,9750** |
+
+**O trade típico perde dinheiro.** A média só está acima do equilíbrio porque
+é puxada por uma minoria de movimentos enormes:
+
+| Aparar os maiores | Média resultante | |
+|---|---|---|
+| Top 1% removido | 1,2177 | ainda bate |
+| **Top 5% removido** | **1,0809** | **já não bate** |
+| Top 10% removido | 0,9737 | perde claramente |
+
+E **nenhum dos dez decis** tem mediana acima do equilíbrio — a do topo é a
+maior, e fica em 0,975.
+
+### O modelo tem competência real, mas na coisa errada
+
+Não é sorte. O modelo detecta genuinamente os eventos:
+
+| Extremos | Capturados pelo decil de topo | Acaso | Lift |
+|---|---|---|---|
+| Top 1% de surpresas | **29,8%** | 10% | **2,98×** |
+| Top 5% | 18,6% | 10% | 1,86× |
+| Top 10% | 15,7% | 10% | 1,57× |
+
+Quase **3× melhor que o acaso** a encontrar os movimentos do top 1%.
+
+**O problema é que essa é exactamente a competência que o mercado de opções já
+tem.** A volatilidade implícita real sabe quando há resultados trimestrais e
+sobe antes deles. O meu "movimento esperado" é uma média móvel de 60 dias que
+não sabe nada sobre calendários de eventos — logo subestima sistematicamente o
+prémio nesses dias, criando um lucro fantasma.
+
+Não está concentrado em poucos tickers (158 de 158 aparecem no decil, os 5 mais
+frequentes são 7% das linhas), mas está concentrado **no tempo**: poucos dias
+grandes por nome. É o padrão de eventos agendados.
+
+### Conclusões da ronda 3
+
+1. **A prazo diário o ML não bate o HAR-RV.** Confirma a ronda 1 e a
+   literatura: a vantagem era o relógio intradiário.
+2. **O sinal de surpresa não é negociável.** A média batia o equilíbrio, a
+   mediana não. O lucro depende de ~5% de trades, e esses são precisamente os
+   eventos que a volatilidade implícita real já cobra.
+3. **Mas o modelo tem competência genuína**: 2,98× o acaso a identificar os
+   movimentos extremos.
+
+### O que isto realmente vale
+
+A conclusão útil não é de trading, é de **gestão de risco**. Saber que uma
+posição tem hoje risco de cauda elevado — 3× melhor que o acaso — permite
+**reduzir exposição**, e isso não paga spread de opções nem prémio de risco de
+volatilidade. É a aplicação onde a competência que o modelo tem é a competência
+de que se precisa.
+
+Como sinal de compra de volatilidade, falha. Como alarme de risco, funciona.
+
+### Ronda 4 — perguntas em aberto
+
+- O alarme de risco reduz mesmo a variância de uma carteira, na prática?
+- A sazonalidade intradiária é estável mês a mês, ou precisa de reestimação?
+- O sinal residual é transversal (esta acção move-se mais que as outras) ou
+  temporal (todas ao mesmo tempo)?
