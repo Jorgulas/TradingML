@@ -599,6 +599,144 @@ as conclusões negativas anteriores eram do primeiro tipo. Esta é do segundo.
 
 ---
 
+# Ronda 7 — a tabela de verdade, e a primeira coisa que sobreviveu
+
+Pergunta do Jorge: *"e se fizeres uma tabela de verdade com os algoritmos
+todos quando for para tomar uma decisão? Inclusive um algoritmo de curto prazo
+ao invés do super curto de decisões de 1 minuto."*
+
+Duas peças: um horizonte que faltava, e uma forma de combinar tudo.
+
+## O degrau que faltava
+
+Os prazos existentes eram os extremos — árvores a decidir o minuto seguinte,
+carteira LONG a decidir 20 dias. Construí o intermédio: **5 dias de bolsa,
+retorno em excesso sobre o índice**, três classes (`src/decision/short_term.py`).
+
+E aproveitei para testar uma hipótese que nunca tinha sido testada em seis
+rondas. Toda a investigação anterior olhou para **cada acção ao longo do
+tempo** — e a direcção temporal mostrou-se imprevisível, sempre. Nunca tinha
+sido testada a informação **transversal**: não *"esta acção vai subir"*, mas
+*"esta acção vai subir mais do que as outras"*. São perguntas diferentes, e a
+segunda é neutra ao mercado por construção.
+
+Três conjuntos de features, mesmos dados, mesmo alvo, 158 acções × 716 dias:
+
+| Conjunto | n | IC diário | long-short a 5d (teste) |
+|---|---|---|---|
+| temporal (séries de cada acção) | 48 | +0,0094 | +0,42% |
+| **transversal (percentis do dia)** | **11** | **+0,0232** | **+0,77%** |
+| ambos | 59 | +0,0112 | +0,12% |
+
+O transversal ganha nas duas métricas, em validação **e** em teste. E `ambos` é
+pior do que o transversal sozinho — as 48 features temporais são ruído em que a
+árvore se afoga.
+
+**O que o modelo usa.** A feature dominante é o percentil de **volatilidade**
+(26,5% do ganho), não de momento. E usa-a de forma não-linear: a regra ingénua
+`-xs_vol_20` sozinha rende **−1,06%**. Também não é reversão a 1 dia
+disfarçada (`-xs_ret_1` sozinha vale +0,29%). É um condicionamento.
+
+## O erro que quase deixei passar
+
+A primeira versão dava `+0,77%, IC95% [+0,17%, +1,38%]` — significativo. Estava
+errado. Forma-se carteira todos os dias e mede-se o que rende nos **5 dias
+seguintes**: a observação de segunda e a de terça partilham 4 dos 5 dias. São
+quase a mesma medição feita duas vezes. Um bootstrap que reamostra dias soltos
+assume 144 observações independentes quando há ~29, e estreita o intervalo por
+cerca de √5.
+
+Corrigido com bootstrap de **blocos** e confirmado sem sobreposição nenhuma, o
+mesmo resultado passa a `+0,77%, IC95% [−0,16%, +1,78%]` — **não
+significativo**. O ponto estimado não mudou; a honestidade do intervalo mudou.
+
+## A tabela de verdade
+
+Cinco algoritmos reduzidos a um veredicto cada, no mesmo instante
+(`src/decision/signals.py`): `curto` (5 dias), `rapido` (1 dia), `padrao`
+(padrão gráfico confirmado nos últimos 10 dias), `regime` (volatilidade do
+mercado em tercis) e `alarme` (risco de cauda, herdado da ronda 6). Dá
+3×3×3×3×2 = **162 células**, todas observadas.
+
+O perigo é óbvio: 162 células sobre 144 dias de teste. Três defesas:
+**suporte contado em dias e não em linhas**; **encolhimento para o modelo
+aditivo** com peso `n_dias/(n_dias + 40)`, de modo a que uma célula rara diga
+exactamente o que a votação simples diria; e **cada esquema escolhe o seu
+próprio limiar** na validação — sem isso, um limiar afinado para a tabela põe
+todos os sinais isolados a ESPERAR sempre, e a tabela "ganha" contra
+adversários que nunca chegaram a jogar.
+
+## O teste que decide
+
+Não *"a tabela ganha?"* mas *"a tabela ganha **mais do que a soma dos
+sinais**?"*. Para ter poder estatístico, avaliação em **walk-forward**:
+re-treino trimestral, cada trimestre pontuado por modelos que nunca o viram.
+349 dias fora da amostra, ~69 janelas independentes contra as 28 do teste único.
+
+| Esquema | Retorno/decisão | IC95% (blocos) | Dias + |
+|---|---|---|---|
+| tabela crua | +0,527% | [+0,125%, +0,974%] | 55,3% |
+| tabela encolhida | +0,449% | [−0,007%, +0,892%] | 58,2% |
+| votação simples | +0,415% | [+0,082%, +0,739%] | 58,2% |
+| **só o sinal `curto`** | **+0,383%** | **[+0,104%, +0,665%]** | 61,0% |
+
+**Tabela menos votação: +0,033%, IC95% [−0,235%, +0,317%].**
+
+## O que isto quer dizer
+
+**1. O sinal transversal de curto prazo é real.** É o primeiro resultado deste
+projecto com intervalo de confiança inteiramente acima de zero fora da amostra,
+em 349 dias, e mantém-se em todas as configurações que experimentei. Líquido
+dos custos medidos (rotação 48%, ~0,03% por ciclo) continua positivo.
+
+**2. A tabela de verdade não acrescenta nada de demonstrável.** Combinar os
+cinco algoritmos rende +0,03% sobre somar os seus votos, com intervalo a
+atravessar o zero. As interacções que só uma tabela consegue captar — *"o
+padrão só funciona em regime calmo"* — não se demonstram nestes dados.
+
+**3. E medi o quanto isto é frágil**, em vez de o descrever. Repetindo o
+walk-forward inteiro só com outra semente do XGBoost — mesmos dados, mesmo
+protocolo, muda apenas a amostragem interna das árvores:
+
+| Esquema | Média | Amplitude entre sementes |
+|---|---|---|
+| tabela crua | +0,596% | 0,146% |
+| tabela encolhida | +0,486% | 0,107% |
+| votação | +0,397% | 0,029% |
+| só o `curto` | +0,387% | 0,037% |
+| *tabela − votação* | *+0,089%* | *0,135%* |
+
+A amplitude da diferença entre tabela e votação (0,135%) é **maior do que a
+própria diferença** (0,089%). E os esquemas simples são 3 a 4× mais estáveis do
+que os da tabela: a vantagem aparente vem acompanhada de quatro vezes mais
+variância de estimação. A ablação por sinal chegou a trocar de sinal entre
+execuções — não é uma ordenação, é ruído.
+
+## A resposta honesta à pergunta
+
+A tabela de verdade é uma boa forma de **ver** como os algoritmos concordam, e é
+isso que a página `/decisao` mostra. Como mecanismo de decisão, não bate somar
+os votos, e somar os votos não bate usar só o melhor sinal. **Toda a evidência
+está concentrada num único algoritmo — o transversal de 5 dias — e a estrutura
+por cima dele não paga a variância que introduz.**
+
+Que é, mais uma vez, o aparelho de medição a funcionar. Desta vez o número bom
+sobreviveu, mas foi a coisa mais simples que o produziu.
+
+## Ressalvas que ficam por resolver
+
+- **Viés de sobrevivência.** As 158 acções são as grandes capitalizações de
+  *hoje*. Uma empresa que colapsou entre 2023 e 2026 não está no painel, e num
+  long-short transversal isso remove precisamente os piores nomes do lado
+  vendido. Não sei o tamanho do efeito; sei o sentido.
+- **Lookahead residual no calendário de resultados**, herdado da ronda 6:
+  `days_to_earnings` com valores altos pode conter datas que não eram públicas
+  na altura. Afecta o sinal `alarme`, que é o que menos pesa.
+- **Três sementes não são uma distribuição.** A amplitude reportada é um piso
+  para a incerteza, não o total dela.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -610,6 +748,7 @@ a inspecção mais fina que o explicou.**
 | 2 | +76% de lucro no decil de topo | Mudança de regime; corrigido, sobra +13% do prémio |
 | 3 | Média 1,30 bate o equilíbrio de 1,11 | **Mediana 0,975** — o trade típico perde; o lucro está em 5% de eventos que as opções já cobram |
 | 4 | Alarme de risco 2,98× melhor que o acaso | Não reduz variância nenhuma; a previsão correlaciona 0,78 com a volatilidade recente |
+| 7 | Tabela de verdade a render +0,45% contra +0,38% do melhor sinal isolado | A diferença (0,03%) é menor do que o que ela se move ao trocar a semente (0,14%) |
 
 ## O que ficou estabelecido
 
@@ -631,6 +770,12 @@ a inspecção mais fina que o explicou.**
 5. **Existe sinal residual genuíno** depois de tirar calendário e inércia:
    Spearman 0,17 a 1h, IC95% [0,153, 0,185].
 6. **O modelo detecta eventos de cauda** 2,98× melhor que o acaso.
+7. **Existe um sinal transversal de curto prazo** (ronda 7): +0,383% por
+   decisão a 5 dias, IC95% [+0,104%, +0,665%] sobre 349 dias fora da amostra
+   em walk-forward. É o único resultado do projecto com intervalo
+   inteiramente acima de zero, e vem de comparar acções entre si — não de
+   prever cada uma ao longo do tempo. Combinar algoritmos por cima dele não
+   acrescenta nada demonstrável.
 
 O ponto 6 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.

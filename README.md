@@ -615,6 +615,130 @@ volatilidade é o que se negoceia diretamente.
 direção continua a ~53%, dentro do ruído. O que mudou foi medir a coisa certa
 em vez de dar à direção o crédito da volatilidade.
 
+## Camada de decisão — tabela de verdade sobre todos os algoritmos
+
+Até aqui cada algoritmo vivia sozinho e era avaliado sozinho. Esta camada
+põe-nos todos a votar no **mesmo instante** e responde a uma pergunta que
+nenhum deles consegue responder por si: quando é que a combinação das opiniões
+vale mais do que a melhor opinião isolada?
+
+```bash
+py src/decision/short_term.py          # o algoritmo de 5 dias, isolado
+py src/decision/signals.py             # distribuicao dos cinco veredictos
+py src/decision/truth_table.py         # a tabela + ablacao + teste de interaccao
+py src/decision/walkforward.py         # avaliacao trimestral + estabilidade
+py src/decision/run_decision.py --walkforward   # calcula e grava para a web
+```
+
+Depois, `/decisao` no dashboard.
+
+### O horizonte que faltava
+
+Os prazos existentes eram os extremos: as árvores decidem a barra seguinte
+(1 minuto) e a carteira LONG decide 20 dias. O novo modelo prevê **5 dias de
+bolsa**, em **excesso sobre o índice**, com três classes e `ESPERAR` como
+decisão a sério.
+
+O alvo é neutro ao mercado por uma razão medida: a 20 barras, 53,7% das janelas
+deste universo são de subida apenas porque o mercado subiu. Um modelo treinado
+no retorno bruto aprende essa deriva e mais nada — e parece bom a fazê-lo.
+
+### Features transversais (a novidade que produziu o resultado)
+
+Todo o resto do projecto olhou para cada acção **ao longo do tempo**, e a
+direcção temporal mostrou-se imprevisível em seis rondas de investigação. Estas
+features fazem a outra pergunta: dentro de cada dia, em que **percentil do
+universo** está esta acção em retorno, volatilidade, força relativa e volume?
+
+É market-neutral por construção (o factor comum desaparece ao ordenar), e foi o
+que funcionou:
+
+| Conjunto | n features | IC diário | long-short a 5 dias |
+|---|---|---|---|
+| temporal | 48 | +0,0094 | +0,42% |
+| **transversal** | **11** | **+0,0232** | **+0,77%** |
+| ambos | 59 | +0,0112 | +0,12% |
+
+Juntar os dois é **pior** do que usar só o transversal — as 48 features
+temporais são ruído em que a árvore se afoga.
+
+### Os cinco sinais
+
+Cada algoritmo reduz-se a um veredicto, tudo avaliado ao fecho de cada dia:
+
+| Sinal | Origem | Valores |
+|---|---|---|
+| `curto` | modelo de 5 dias | SOBE / NEUTRO / DESCE |
+| `rapido` | modelo de 1 dia | SOBE / NEUTRO / DESCE |
+| `padrao` | padrão gráfico confirmado nos últimos 10 dias | ALTA / NENHUM / BAIXA |
+| `regime` | volatilidade do mercado em tercis | CALMO / NORMAL / AGITADO |
+| `alarme` | risco de cauda (calendário de resultados) | SIM / NÃO |
+
+`curto` e `rapido` são **transversais**: "SOBE" quer dizer *"está no tercil de
+topo do universo hoje"*, não *"a probabilidade passou de 0,6"*. Assim o
+veredicto não muda de sentido quando o mercado inteiro fica optimista.
+
+Tudo o que define um veredicto — modelos, tercis, limiares — é estimado **só na
+porção de treino**. Um tercil calculado sobre a série inteira já contém o
+futuro.
+
+### As três defesas contra 162 células
+
+3×3×3×3×2 = 162 combinações sobre 144 dias de teste dá menos de um dia por
+célula. Sem defesas, algumas células teriam números espectaculares por acaso e
+escolher a melhor seria garantir que se escolhe a mais sortuda.
+
+1. **Suporte contado em DIAS, não em linhas.** Uma célula com 800 linhas
+   concentradas em 6 dias tem 6 observações — as 158 acções movem-se juntas.
+2. **Encolhimento para o modelo aditivo.** Cada célula usa
+   `peso × média_da_célula + (1 − peso) × votação_simples`, com
+   `peso = n_dias / (n_dias + 40)`. Uma célula rara diz exactamente o que a
+   votação diria; só as bem observadas se afastam dela.
+3. **Cada esquema escolhe o seu próprio limiar** na validação. Sem isto, um
+   limiar afinado para a tabela põe todos os sinais isolados a `ESPERAR`
+   sempre, e a tabela "ganha" contra adversários que nunca chegaram a jogar.
+
+### O resultado
+
+Avaliação em **walk-forward** (re-treino trimestral, cada trimestre pontuado
+por modelos que nunca o viram): 349 dias fora da amostra, ~69 janelas
+independentes contra as 28 de um teste único.
+
+| Esquema | Retorno/decisão | IC95% (blocos) |
+|---|---|---|
+| tabela crua | +0,527% | [+0,125%, +0,974%] |
+| tabela encolhida | +0,449% | [−0,007%, +0,892%] |
+| votação simples | +0,415% | [+0,082%, +0,739%] |
+| **só o sinal `curto`** | **+0,383%** | **[+0,104%, +0,665%]** |
+
+**Tabela menos votação: +0,033%, IC95% [−0,235%, +0,317%].**
+
+O sinal de curto prazo é o primeiro resultado deste projecto com intervalo de
+confiança inteiramente acima de zero fora da amostra. A tabela **não** melhora
+sobre ele de forma demonstrável: repetindo o walk-forward só com outra semente
+do XGBoost, a diferença entre esquemas move-se 0,135% — mais do que a própria
+diferença (0,089%).
+
+### Bootstrap de blocos (e o erro que ele corrigiu)
+
+Forma-se carteira todos os dias e mede-se o que ela rende nos 5 dias seguintes:
+a observação de segunda e a de terça partilham 4 dos 5 dias. Reamostrar dias
+soltos assume 144 observações independentes quando há ~29, e estreita o
+intervalo por cerca de √5.
+
+A primeira versão desta experiência deu `+0,77%, IC95% [+0,17%, +1,38%]` —
+significativo. Com bootstrap de blocos: `[−0,16%, +1,78%]`, não significativo.
+O ponto estimado não mudou; a honestidade do intervalo mudou.
+
+### Ressalvas
+
+- **Viés de sobrevivência**: as 158 acções são as grandes capitalizações de
+  hoje. Uma empresa que colapsou entre 2023 e 2026 não está no painel, e num
+  long-short transversal isso remove os piores nomes do lado vendido.
+- **Lookahead residual** no calendário de resultados (afecta só o `alarme`).
+- **Três sementes não são uma distribuição**: a amplitude reportada é um piso
+  para a incerteza.
+
 ## Testes
 
 ```bash
@@ -640,7 +764,8 @@ src/simulator.py        motor de paper trading
 src/run_daily.py        orquestrador diario (idempotente por data)
 scripts/bootstrap.py    setup inicial do zero (inclui o subsistema de padroes)
 scripts/local_daily_sync.py   o que a tarefa do Windows corre todas as manhas
-web/                    dashboard Flask (so-leitura): / carteiras, /patterns, /live, /trees
+web/                    dashboard Flask (so-leitura): / carteiras, /patterns, /live,
+                        /trees, /decisao
 tests/                  pytest
 
 src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
@@ -654,6 +779,14 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
   direction.py          alvo binario (sobe/desce), embargo, controlo aleatorio
   portfolio.py          terceira carteira: negoceia o sinal de direccao
   realtime.py           forward test ao vivo (modo live + replay) + aprendizagem online
+
+src/decision/           CAMADA DE DECISAO (tabela de verdade)
+  panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia
+  short_term.py         algoritmo de 5 dias, bootstrap de blocos, custos medidos
+  signals.py            cada algoritmo reduzido a um veredicto
+  truth_table.py        162 celulas com encolhimento, ablacao, teste de interaccao
+  walkforward.py        re-treino trimestral + estabilidade entre sementes
+  run_decision.py       calcula e grava para a web (unico ponto de escrita)
 
 src/trees/              ARVORES DE DECISAO (XGBoost, 3 classes com ESPERAR)
   features.py           indicadores tecnicos + forma da janela + rotulo de 3 classes

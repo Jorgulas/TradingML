@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradingML -- Tabela de Verdade</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>TradingML</h1>
+    <nav class="nav-links">
+      <a href="/">Carteiras</a>
+      <a href="/patterns">Padroes</a>
+      <a href="/live">Tempo Real</a>
+      <a href="/trees">Arvores</a>
+      <a href="/decisao" class="active">Decisao</a>
+    </nav>
+    <span class="sim-badge">SIMULACAO -- sem dinheiro real</span>
+  </div>
+  <div class="header-right" id="header-updated">a carregar...</div>
+</header>
+
+<section class="health-strip" id="decision-strip">a carregar tabela...</section>
+
+<main>
+  <section class="panel">
+    <p class="explainer">
+      Cinco algoritmos votam no mesmo instante, ao fecho de cada dia. Cada um reduz-se a um
+      <strong>veredicto</strong>, e a combinacao dos cinco define uma celula da tabela. Cada celula
+      guarda o que aconteceu historicamente nessa situacao &mdash; retorno a
+      <strong>{{ horizon }} dias em excesso sobre o indice</strong> &mdash; e e' isso que decide
+      COMPRAR, VENDER ou ESPERAR.
+    </p>
+    <p class="explainer">
+      A estimativa de cada celula nao e' a sua media crua. E' uma interpolacao entre a media da
+      celula e o que a <strong>soma dos efeitos de cada sinal</strong> preveria, com o peso a
+      crescer com o numero de <strong>dias</strong> de suporte (nao de linhas: 158 accoes no mesmo
+      dia sao praticamente uma observacao). Celulas raras dizem o mesmo que a votacao simples
+      diria; so' as bem observadas se afastam dela.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>Veredicto de hoje <span class="subtitle" id="today-date"></span></h2>
+    <div class="cards" id="today-cards"></div>
+    <div class="table-wrap">
+      <table id="today-table">
+        <thead>
+          <tr>
+            <th>Accao</th><th>curto (5d)</th><th>rapido (1d)</th><th>padrao</th>
+            <th>regime</th><th>alarme</th><th>estimativa</th><th>decisao</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Vale a pena combinar? <span class="subtitle">avaliacao fora da amostra</span></h2>
+    <p class="explainer">
+      A pergunta nao e' "a tabela ganha?" mas "a tabela ganha <strong>mais do que a soma dos
+      sinais</strong>?". Se nao ganhar, as interaccoes que so' uma tabela consegue captar nao
+      existem, e uma votacao simples chega. Intervalos por bootstrap de <strong>blocos</strong>:
+      janelas de {{ horizon }} dias medidas todos os dias sobrepoem-se, e trata-las como
+      independentes estreitaria o intervalo por cerca de raiz de {{ horizon }}.
+    </p>
+    <div class="table-wrap">
+      <table id="schemes-table">
+        <thead>
+          <tr>
+            <th>Esquema</th><th>Retorno por decisao</th><th>IC 95%</th>
+            <th>Dias positivos</th><th>Cobertura</th><th>Liquido de custos</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="explainer" id="interaction-verdict"></p>
+  </section>
+
+  <section class="panel" id="walkforward-panel" hidden>
+    <h2>Walk-forward <span class="subtitle">re-treino trimestral, tudo fora da amostra</span></h2>
+    <p class="explainer">
+      Um teste unico de 144 dias sao ~28 janelas independentes, e com 28 pontos so' um efeito
+      enorme seria detectavel. Aqui re-treina-se tudo trimestre a trimestre e cada trimestre e'
+      avaliado por modelos que nunca o viram, o que triplica o periodo fora da amostra.
+    </p>
+    <div class="table-wrap">
+      <table id="walkforward-table">
+        <thead>
+          <tr><th>Esquema</th><th>Retorno por decisao</th><th>IC 95%</th><th>Dias positivos</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="explainer" id="walkforward-verdict"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Que sinais pagam o seu lugar <span class="subtitle">ablacao</span></h2>
+    <p class="explainer">
+      Cada sinal a mais multiplica o numero de celulas e divide os dados por elas. Um sinal so'
+      merece estar na tabela se tirar-lhe o lugar piorar o resultado.
+    </p>
+    <p class="explainer">
+      <strong>Ler com reserva.</strong> Tirar um sinal muda tres coisas ao mesmo tempo &mdash; o
+      numero de celulas, o encolhimento de cada uma e o limiar escolhido na validacao &mdash; e o
+      resultado nao e' estavel entre execucoes: repetindo o walk-forward so' com outra semente do
+      XGBoost, a diferenca entre esquemas move-se tanto como a propria diferenca. O que se le aqui
+      e' um diagnostico de uma amostra, nao uma ordenacao dos sinais.
+    </p>
+    <div class="table-wrap">
+      <table id="ablation-table">
+        <thead><tr><th>Sinal retirado</th><th>Retorno sem ele</th><th>Perda</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>A tabela <span class="subtitle" id="cells-count"></span></h2>
+    <div class="controls-panel">
+      <label>Mostrar
+        <select id="cells-filter">
+          <option value="extremes">extremos (mais optimistas e mais pessimistas)</option>
+          <option value="acted">so' as celulas que agem</option>
+          <option value="supported">so' as bem observadas</option>
+          <option value="all">todas</option>
+        </select>
+      </label>
+      <span class="calc-time" id="cells-note"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="cells-table">
+        <thead>
+          <tr>
+            <th>curto</th><th>rapido</th><th>padrao</th><th>regime</th><th>alarme</th>
+            <th>dias</th><th>linhas</th><th>media da celula</th><th>votacao</th>
+            <th>peso</th><th>usado</th><th>decisao</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Tabela de verdade sobre cinco algoritmos, alvo neutro ao mercado a {{ horizon }} dias.
+  Simulacao educativa &mdash; nao e' aconselhamento financeiro.
+</footer>
+
+<script src="{{ url_for('static', filename='decision.js') }}"></script>
+</body>
+</html>

@@ -490,3 +490,70 @@ CREATE TABLE IF NOT EXISTS magnitude_models (
     sweep_json             TEXT,
     top_features_json      TEXT
 );
+
+
+-- ---------------------------------------------------------------------------
+-- Camada de decisao: tabela de verdade sobre todos os algoritmos
+-- ---------------------------------------------------------------------------
+-- Uma linha por execucao. Guarda-se o resultado da avaliacao junto com a
+-- tabela porque as duas coisas so' significam alguma coisa juntas: uma celula
+-- que diz COMPRAR sem o intervalo de confianca do esquema e' uma opiniao sem
+-- proveniencia.
+CREATE TABLE IF NOT EXISTS decision_runs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at          TEXT NOT NULL,
+    horizon_days        INTEGER NOT NULL,
+    threshold           REAL NOT NULL,
+    n_cells             INTEGER NOT NULL,
+    n_cells_supported   INTEGER NOT NULL,
+    mean_weight         REAL,
+    train_days          INTEGER,
+    validation_days     INTEGER,
+    test_days           INTEGER,
+    -- Resultado de cada esquema no teste (tabela, votacao, sinais isolados).
+    results_json        TEXT,
+    ablation_json       TEXT,
+    -- A comparacao que decide: tabela menos votacao simples, com IC.
+    interaction_diff    REAL,
+    interaction_low     REAL,
+    interaction_high    REAL,
+    -- Avaliacao em walk-forward, quando existe. E' a que tem poder estatistico.
+    walkforward_json    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS decision_cells (
+    run_id      INTEGER NOT NULL,
+    curto       TEXT NOT NULL,
+    rapido      TEXT NOT NULL,
+    padrao      TEXT NOT NULL,
+    regime      TEXT NOT NULL,
+    alarme      TEXT NOT NULL,
+    n_rows      INTEGER NOT NULL,
+    n_days      INTEGER NOT NULL,
+    cell_mean   REAL,
+    additive    REAL,
+    weight      REAL,
+    estimate    REAL,
+    p_up        REAL,
+    accao       TEXT NOT NULL,
+    PRIMARY KEY (run_id, curto, rapido, padrao, regime, alarme)
+);
+
+-- Veredicto de hoje por accao: em que celula da tabela cada uma cai.
+CREATE TABLE IF NOT EXISTS decision_current (
+    run_id      INTEGER NOT NULL,
+    ticker      TEXT NOT NULL,
+    ts          TEXT NOT NULL,
+    curto       TEXT NOT NULL,
+    rapido      TEXT NOT NULL,
+    padrao      TEXT NOT NULL,
+    regime      TEXT NOT NULL,
+    alarme      TEXT NOT NULL,
+    confidence  REAL,
+    estimate    REAL,
+    accao       TEXT NOT NULL,
+    PRIMARY KEY (run_id, ticker)
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_cells ON decision_cells(run_id, estimate);
+CREATE INDEX IF NOT EXISTS idx_decision_current ON decision_current(run_id, accao);

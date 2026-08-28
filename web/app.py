@@ -297,6 +297,40 @@ def api_trees_decisions():
     })
 
 
+@app.route("/decisao")
+def decision_page():
+    return render_template("decision.html",
+                           horizon=config.DECISION["horizon_days"])
+
+
+@app.route("/api/decision")
+def api_decision():
+    """Ultima execucao da camada de decisao. Estritamente leitura: quem calcula
+    e' src/decision/run_decision.py."""
+    conn = get_db()
+    run = conn.execute(
+        "SELECT * FROM decision_runs ORDER BY id DESC LIMIT 1").fetchone()
+    if run is None:
+        return jsonify({"error": "ainda nao ha' tabela: corre "
+                                 "`py src/decision/run_decision.py --walkforward`"})
+
+    run = dict(run)
+    payload = {
+        "run": {k: v for k, v in run.items()
+                if k not in ("results_json", "ablation_json", "walkforward_json")},
+        "results": json.loads(run["results_json"]) if run["results_json"] else [],
+        "ablation": json.loads(run["ablation_json"]) if run["ablation_json"] else [],
+        "walkforward": json.loads(run["walkforward_json"]) if run["walkforward_json"] else None,
+        "cells": [dict(r) for r in conn.execute(
+            "SELECT * FROM decision_cells WHERE run_id = ? ORDER BY estimate DESC",
+            (run["id"],))],
+        "today": [dict(r) for r in conn.execute(
+            "SELECT * FROM decision_current WHERE run_id = ? ORDER BY ticker",
+            (run["id"],))],
+    }
+    return jsonify(payload)
+
+
 @app.route("/api/live/state")
 def api_live_state():
     state = realtime.session_state(get_db())

@@ -408,3 +408,56 @@ TREES = {
         "random_state": 42,
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Camada de DECISAO -- tabela de verdade sobre todos os algoritmos
+# ---------------------------------------------------------------------------
+# Ate' aqui cada algoritmo vivia sozinho e era avaliado sozinho. Esta camada
+# poe-nos todos a votar no MESMO instante e pergunta uma coisa que nenhum deles
+# consegue responder por si: quando e' que a combinacao das opinioes vale mais
+# do que a melhor opiniao isolada?
+#
+# A grelha e' DIARIA (uma decisao por accao por dia, ao fecho) porque e' o
+# unico instante em que todos os sinais existem ao mesmo tempo. Os sinais de
+# barras de 1h sao lidos na ultima barra do dia.
+DECISION = {
+    "horizon_days": 5,          # o "curto prazo": uma semana de bolsa
+    "fast_horizon_days": 1,     # a perna rapida da tabela
+    "band_k": 0.5,              # banda de indiferenca, em desvios-padrao
+    "vol_window": 20,
+
+    # Alvo NEUTRO AO MERCADO. Sem isto mede-se sobretudo a deriva geral: a 20
+    # barras, 53.7% das janelas sao de subida so' porque o mercado subiu, e uma
+    # tabela de verdade "aprenderia" isso e nao outra coisa.
+    "market_neutral": True,
+
+    "train_fraction": 0.6,
+    "validation_fraction": 0.2,
+
+    # Suporte minimo, em DIAS distintos e nao em linhas. Os 160 tickers movem-se
+    # todos juntos no mesmo dia, portanto 500 linhas de um so' dia sao uma
+    # observacao, nao 500. Abaixo disto a celula recua para a ordem inferior.
+    "min_cell_days": 25,
+    # Interpolacao de Jelinek-Mercer entre a celula e o recuo: com backoff_k
+    # dias de suporte confia-se meio-a-meio na celula e na ordem inferior.
+    "backoff_k": 40,
+
+    # Quanta vantagem a celula precisa de ter (em probabilidade de subida) para
+    # a tabela agir em vez de ESPERAR. Escolhido na validacao, nunca no teste.
+    "edge_threshold": 0.02,
+
+    # Padrao detectado ha' mais de isto ja' nao informa a decisao de hoje.
+    "pattern_max_age_days": 10,
+
+    "xgb_params": {
+        "n_estimators": 400,
+        "learning_rate": 0.05,
+        "max_depth": 4,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 2.0,
+        "tree_method": "hist",
+        "random_state": 42,
+    },
+}
