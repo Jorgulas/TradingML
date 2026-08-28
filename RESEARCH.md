@@ -689,6 +689,12 @@ projecto com intervalo de confiança inteiramente acima de zero fora da amostra,
 em 349 dias, e mantém-se em todas as configurações que experimentei. Líquido
 dos custos medidos (rotação 48%, ~0,03% por ciclo) continua positivo.
 
+> **Corrigido na ronda 8.** Cerca de metade deste número era viés de
+> sobrevivência: o painel só contém as grandes capitalizações que chegaram
+> vivas ao fim. Repondo as que caíram do índice, o efeito cai para perto de
+> metade e o intervalo passa a incluir o zero. O sinal existe; a magnitude
+> reportada aqui está inflacionada.
+
 **2. A tabela de verdade não acrescenta nada de demonstrável.** Combinar os
 cinco algoritmos rende +0,03% sobre somar os seus votos, com intervalo a
 atravessar o zero. As interacções que só uma tabela consegue captar — *"o
@@ -737,6 +743,100 @@ sobreviveu, mas foi a coisa mais simples que o produziu.
 
 ---
 
+# Ronda 8 — o viés de sobrevivência, medido
+
+Pergunta do Jorge, e era a ressalva certa a atacar: *"testa se o viés de
+sobrevivência explica o resultado."*
+
+O painel da ronda 7 tem 158 grandes capitalizações de **hoje**. O primeiro
+número diz tudo: das 158, **todas** têm histórico completo e **todas** chegam
+vivas ao último dia. Zero atrito em três anos. Um índice real perde 5 a 8% dos
+membros por ano — seriam 15 a 25 empresas. A lista foi escolhida no fim.
+
+## Duas descobertas antes sequer de medir
+
+**A fonte de dados também está enviesada.** Testei 20 empresas que saíram do
+S&P 500 neste período por falência ou aquisição — SIVB, FRC, ATVI, PXD, HES,
+MRO, CTLT, JNPR, WBA, DISH, RAD, YELL, WE, FSR, NKLA, MPW, SAVE, TUP, BIG.
+**Nenhuma devolve dados.** O yfinance apaga as delistadas. Não é a minha lista
+que está mal: é a fonte, e nenhuma reconstrução completa é possível aqui.
+
+**Um único ticker corrompido quase produziu a conclusão errada.** Ao alargar o
+universo, a BYND entrou com um desdobramento inverso aplicado de forma
+inconsistente: oscilava entre 0,55 e 17,85 dólares em dias seguidos, seis
+vezes, o que dá retornos de +2900% seguidos de −97%. Esse ticker sozinho
+produziu **99%** de um colapso de −8,9% num trimestre, e eu estava a um passo
+de concluir que o modelo não generalizava para fora das grandes capitalizações.
+Verifiquei todo o universo: só BYND e MRNA estão contaminadas, **nenhuma delas
+nas 158 originais** — o resultado da ronda 7 não vinha daí. O construtor do
+painel passou a rejeitar qualquer série com variação diária acima de 100% e a
+reportar quem rejeitou.
+
+## Os quatro testes
+
+**1. De que perna vem o resultado?** Comprada 52,1%, vendida 47,9%. Metade vem
+do lado vendido, que é precisamente o que a ausência de falidos afecta. Não
+absolve.
+
+**2. O modelo evita os desastres que existem?** Não. O posto médio de confiança
+das quedas violentas (2% piores) é **0,6175** — o modelo põe-nas *acima* da
+mediana, tende a comprá-las (p = 1,2e−15). As subidas violentas estão em
+0,6413. Ou seja: carrega em magnitude, com uma margem direccional fina. Isto
+apontava para viés a inflacionar o resultado.
+
+**3. O efeito concentra-se nas acções seguras?** Não. Estratificando por
+drawdown máximo, o IC é +0,0516 no grupo mais frágil, +0,0194 no intermédio e
++0,0267 no mais sólido. Não é um artefacto de mega-caps tranquilas.
+
+**4. Repor as que faltam.** O teste directo: 44 ex-membros do índice e 14 nomes
+especulativos que o yfinance ainda serve, com filtro de liquidez idêntico para
+todos. Média de três sementes, walk-forward trimestral:
+
+| Universo | n | Retorno 5d | IC95% | Amplitude entre sementes |
+|---|---|---|---|---|
+| A. só sobreviventes (a ronda 7) | 158 | **+0,694%** | [+0,192%, +1,202%] | 0,070% |
+| B. + caídas do índice | 201 | **+0,353%** | [+0,026%, +0,703%] | 0,082% |
+| C. + especulativas | 171 | +0,403% | [+0,056%, +0,699%] | 0,125% |
+| D. + ambas | 214 | **+0,241%** | [−0,048%, +0,613%] | 0,138% |
+
+A ordem é idêntica nas três sementes, e os intervalos entre universos (0,34pp
+de A para B) são **4 a 5× maiores** do que a dispersão entre sementes
+(0,07-0,08pp). Ao contrário da diferença tabela-versus-votação da ronda 7,
+**esta diferença é real**.
+
+## A resposta
+
+**O viés de sobrevivência não explica tudo, mas explica cerca de metade.**
+
+- Repor só os ex-membros do índice — a correcção legítima do viés — corta o
+  efeito de +0,694% para +0,353%: **49% desaparece**. E a redução é
+  estatisticamente significativa.
+- No universo mais completo que consigo montar, sobra +0,241%, uma queda de
+  **65%**, e o intervalo de confiança passa a incluir o zero.
+- O que sobra continua positivo e continua estável entre sementes. Não é zero.
+  Mas é pequeno de mais para esta amostra o resolver.
+
+Transposto para o número da ronda 7 (+0,383% por decisão no walk-forward
+completo), a estimativa corrigida ronda **+0,13% a 5 dias** — que já não
+sobreviveria ao seu próprio intervalo de confiança.
+
+**E mesmo isto é um limite superior.** As 19 empresas verdadeiramente
+delistadas continuam irrecuperáveis, e todas as adições que consegui fazer
+baixaram o efeito. Não há razão para achar que as que faltam o fariam subir.
+
+## O que isto obriga a corrigir na ronda 7
+
+A frase *"o primeiro resultado deste projecto com intervalo de confiança
+inteiramente acima de zero"* estava certa para o universo em que foi medida e
+é enganadora fora dele. A versão honesta: **existe um sinal transversal de
+curto prazo, mas cerca de metade do que lhe atribuí era a lista de acções e não
+o modelo.** O sinal residual não é distinguível de zero com os dados que tenho.
+
+Sétima ronda, sétima vez que a inspecção mais fina explicou o número. Desta vez
+foi o Jorge a apontar onde olhar.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -749,6 +849,7 @@ a inspecção mais fina que o explicou.**
 | 3 | Média 1,30 bate o equilíbrio de 1,11 | **Mediana 0,975** — o trade típico perde; o lucro está em 5% de eventos que as opções já cobram |
 | 4 | Alarme de risco 2,98× melhor que o acaso | Não reduz variância nenhuma; a previsão correlaciona 0,78 com a volatilidade recente |
 | 7 | Tabela de verdade a render +0,45% contra +0,38% do melhor sinal isolado | A diferença (0,03%) é menor do que o que ela se move ao trocar a semente (0,14%) |
+| 8 | Sinal transversal a +0,69% com intervalo acima de zero | Metade era a lista de acções: repondo as que caíram do índice sobra +0,35%, e no universo completo +0,24% com o zero lá dentro |
 
 ## O que ficou estabelecido
 
@@ -770,12 +871,14 @@ a inspecção mais fina que o explicou.**
 5. **Existe sinal residual genuíno** depois de tirar calendário e inércia:
    Spearman 0,17 a 1h, IC95% [0,153, 0,185].
 6. **O modelo detecta eventos de cauda** 2,98× melhor que o acaso.
-7. **Existe um sinal transversal de curto prazo** (ronda 7): +0,383% por
-   decisão a 5 dias, IC95% [+0,104%, +0,665%] sobre 349 dias fora da amostra
-   em walk-forward. É o único resultado do projecto com intervalo
-   inteiramente acima de zero, e vem de comparar acções entre si — não de
-   prever cada uma ao longo do tempo. Combinar algoritmos por cima dele não
-   acrescenta nada demonstrável.
+7. **Existe um sinal transversal de curto prazo** (ronda 7), mas **cerca de
+   metade do que lhe atribuí era viés de sobrevivência** (ronda 8). Medido no
+   universo de sobreviventes dava +0,694%; repondo as acções que caíram do
+   índice sobra +0,353%, e no universo mais completo possível +0,241% com o
+   zero dentro do intervalo. O efeito é positivo e estável entre sementes, mas
+   já não é distinguível de zero com estes dados. Vem de comparar acções entre
+   si — não de prever cada uma ao longo do tempo — e combinar algoritmos por
+   cima dele não acrescenta nada demonstrável.
 
 O ponto 6 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.

@@ -719,6 +719,10 @@ sobre ele de forma demonstrável: repetindo o walk-forward só com outra semente
 do XGBoost, a diferença entre esquemas move-se 0,135% — mais do que a própria
 diferença (0,089%).
 
+> **Corrigido pela secção seguinte.** Cerca de metade deste número é viés de
+> sobrevivência. Repondo as acções que caíram do índice, o efeito cai para
+> perto de metade e o intervalo passa a incluir o zero.
+
 ### Bootstrap de blocos (e o erro que ele corrigiu)
 
 Forma-se carteira todos os dias e mede-se o que ela rende nos 5 dias seguintes:
@@ -732,12 +736,70 @@ O ponto estimado não mudou; a honestidade do intervalo mudou.
 
 ### Ressalvas
 
-- **Viés de sobrevivência**: as 158 acções são as grandes capitalizações de
-  hoje. Uma empresa que colapsou entre 2023 e 2026 não está no painel, e num
-  long-short transversal isso remove os piores nomes do lado vendido.
+- **Viés de sobrevivência**: medido na secção seguinte. Explica cerca de
+  metade do efeito, e o resto não é distinguível de zero.
 - **Lookahead residual** no calendário de resultados (afecta só o `alarme`).
 - **Três sementes não são uma distribuição**: a amplitude reportada é um piso
   para a incerteza.
+
+## Viés de sobrevivência — medido, não assumido
+
+```bash
+py src/research/fallen_universe.py    # busca as accoes que cairam do universo
+py src/research/survivorship.py       # os quatro testes
+```
+
+O painel da camada de decisão tem 158 grandes capitalizações de **hoje**. Das
+158, todas têm histórico completo e todas chegam vivas ao último dia: zero
+atrito em três anos, quando um índice real perde 5 a 8% dos membros por ano. A
+lista foi escolhida no fim, e isso tinha de ser medido.
+
+### Duas descobertas sobre os dados
+
+**O yfinance apaga as empresas delistadas.** Das 20 que sabidamente saíram do
+S&P 500 neste período por falência ou aquisição — SIVB, FRC, ATVI, PXD, HES,
+MRO, CTLT, JNPR, WBA, DISH, RAD, YELL, WE, FSR, NKLA, MPW, SAVE, TUP, BIG —
+**nenhuma devolve dados**. Nenhuma reconstrução completa é possível.
+
+**Um ticker corrompido quase produziu a conclusão errada.** A BYND entrou no
+painel com um desdobramento inverso aplicado de forma inconsistente pela fonte:
+0,55 → 17,85 → 0,56 dólares em dias seguidos, seis vezes. Retornos de +2900%
+seguidos de −97%. Esse ticker sozinho gerou **99%** de um colapso de −8,9% num
+trimestre, e quase levou à conclusão de que o modelo não generalizava.
+`src/decision/panel.py` passou a rejeitar qualquer série com variação diária
+acima de 100% e a reportar quem rejeitou — perder um ticker em silêncio é pior
+do que o incluir.
+
+### O resultado
+
+Quatro universos, mesmo protocolo, média de três sementes:
+
+| Universo | n | Retorno 5d | IC95% | Amplitude entre sementes |
+|---|---|---|---|---|
+| A. só sobreviventes | 158 | **+0,694%** | [+0,192%, +1,202%] | 0,070% |
+| B. + caídas do índice | 201 | **+0,353%** | [+0,026%, +0,703%] | 0,082% |
+| C. + especulativas | 171 | +0,403% | [+0,056%, +0,699%] | 0,125% |
+| D. + ambas | 214 | **+0,241%** | [−0,048%, +0,613%] | 0,138% |
+
+A ordem repete-se nas três sementes e os intervalos entre universos são 4 a 5×
+maiores do que a dispersão entre sementes — **a diferença é real**.
+
+**Cerca de metade do efeito era a lista de acções.** Repor os ex-membros do
+índice remove 49%; o universo mais completo remove 65% e o intervalo passa a
+incluir o zero. O que sobra continua positivo e estável, mas é pequeno de mais
+para esta amostra o resolver. E é um limite superior: as 19 delistadas
+continuam irrecuperáveis, e **todas** as adições que foi possível fazer
+baixaram o efeito.
+
+### Os outros três testes
+
+- **De que perna vem o resultado:** comprada 52,1%, vendida 47,9%. Metade vem
+  do lado que a ausência de falidos afecta.
+- **O modelo evita os desastres?** Não: põe as quedas violentas em 0,6175 de
+  posto de confiança, ou seja *acima* da mediana (p = 1,2e−15). Carrega em
+  magnitude, com margem direccional fina.
+- **Concentra-se nas acções seguras?** Não: o IC é maior no grupo de maior
+  drawdown (+0,0516) do que no mais sólido (+0,0267).
 
 ## Testes
 
@@ -779,6 +841,10 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
   direction.py          alvo binario (sobe/desce), embargo, controlo aleatorio
   portfolio.py          terceira carteira: negoceia o sinal de direccao
   realtime.py           forward test ao vivo (modo live + replay) + aprendizagem online
+
+src/research/           EXPERIENCIAS (ver RESEARCH.md)
+  fallen_universe.py    accoes que cairam do universo + filtro de liquidez
+  survivorship.py       os quatro testes ao vies de sobrevivencia
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia

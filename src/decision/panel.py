@@ -91,10 +91,46 @@ def add_cross_sectional(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def build(conn, tickers=None, min_days: int = 250) -> pd.DataFrame:
-    """Painel diario: uma linha por (ticker, dia) com features e os dois alvos."""
+def _daily_bars(conn, ticker: str, timeframe: str) -> pd.DataFrame:
+    """Barras diarias, venham elas ja' diarias ou agregadas de 1h.
+
+    O timeframe "1d" existe para a experiencia de sobrevivencia: o yfinance so'
+    da' 730 dias de barras horarias, o que nao chega para empresas que sairam do
+    universo em 2023-2024. Em barras diarias o historico vai muito mais atras."""
+    bars = load_bars(conn, ticker, timeframe)
+    return bars if timeframe == "1d" else to_daily(bars)
+
+
+MAX_PLAUSIBLE_DAILY_RETURN = 1.0   # 100% num dia
+
+
+def is_corrupt(bars: pd.DataFrame) -> bool:
+    """A serie contem movimentos que nenhuma accao faz de verdade?
+
+    Nao e' zelo abstracto -- foi assim que se perdeu uma experiencia inteira.
+    Ao alargar o universo para testar o vies de sobrevivencia, a BYND entrou
+    com um desdobramento inverso aplicado de forma inconsistente pela fonte:
+    oscilava entre 0,55 e 17,85 dolares em dias seguidos, seis vezes, o que da'
+    retornos de +2900% seguidos de -97%. Esse unico ticker produziu 99% do
+    colapso que quase me levou a concluir que o modelo nao generalizava.
+
+    Depois de ajustada para desdobramentos e dividendos, uma variacao diaria
+    acima de 100% numa accao liquida americana e' praticamente sempre um erro de
+    ajustamento. Excluir por engano um evento genuino custa uma accao entre
+    duzentas; deixar passar uma serie corrompida custa a medicao toda."""
+    returns = bars["close"].pct_change().abs()
+    return bool((returns > MAX_PLAUSIBLE_DAILY_RETURN).any())
+
+
+def build(conn, tickers=None, min_days: int = 250,
+          timeframe: str = "1h", excluded: list = None) -> pd.DataFrame:
+    """Painel diario: uma linha por (ticker, dia) com features e os dois alvos.
+
+    `excluded`, se for passada uma lista, recebe os tickers rejeitados por
+    dados impossiveis -- para quem chama poder reporta-los em vez de os perder
+    em silencio."""
     tickers = tickers or config.TREE_TICKERS
-    benchmark = to_daily(load_bars(conn, config.BENCHMARK["ticker"], "1h"))
+    benchmark = _daily_bars(conn, config.BENCHMARK["ticker"], timeframe)
 
     horizon = D["horizon_days"]
     fast = D["fast_horizon_days"]
@@ -102,11 +138,12 @@ def build(conn, tickers=None, min_days: int = 250) -> pd.DataFrame:
 
     frames = []
     for ticker in tickers:
-        intraday = load_bars(conn, ticker, "1h")
-        if intraday.empty:
+        bars = _daily_bars(conn, ticker, timeframe)
+        if bars.empty or len(bars) < min_days:
             continue
-        bars = to_daily(intraday)
-        if len(bars) < min_days:
+        if is_corrupt(bars):
+            if excluded is not None:
+                excluded.append(ticker)
             continue
 
         matrix = (F.indicator_features(bars)
