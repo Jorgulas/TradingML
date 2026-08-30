@@ -801,6 +801,89 @@ baixaram o efeito.
 - **Concentra-se nas acções seguras?** Não: o IC é maior no grupo de maior
   drawdown (+0,0516) do que no mais sólido (+0,0267).
 
+## Ângulo da tangente à média móvel
+
+```bash
+py src/research/tangent_angle.py --timeframe 1h --horizons 1,3,7
+py src/research/tangent_angle.py --timeframe 1d --horizons 1,3,5
+```
+
+Desenha-se a média móvel e, no último ponto, mede-se o **ângulo entre a recta do
+troço anterior e a do troço recente**. Média plana que passa a subir dá um
+"joelho" positivo; quando volta a ficar plana, negativo. Limiar com zona morta,
+e acima dele uma **moeda enviesada** para o lado do joelho.
+
+### O ângulo tem de ser normalizado
+
+Um ângulo exige os dois eixos nas mesmas unidades, e preço e tempo não são. Uma
+acção de $500 e uma de $5 com o mesmo movimento relativo dariam ângulos
+diferentes, e um limiar de 25° dependeria da escala do gráfico.
+
+O declive é medido em **volatilidade por barra**, sobre **log-preço**: 45°
+significa "a média avança um movimento típico por barra", igual em qualquer
+acção. A primeira versão media sobre o preço e dividia por `volatilidade ×
+preço`; um teste apanhou que uma subida perfeitamente constante dava joelho de
+16,7° em vez de zero — o denominador andava durante a tendência e fabricava um
+joelho inexistente.
+
+Note-se também que **`arctan` é monótona**: "ângulo > 25°" é idêntico a "declive
+normalizado > 0,466". O ângulo absoluto é momentum com outro nome. O que é novo
+é o ângulo *entre dois troços* — curvatura, não direcção.
+
+### Duas propriedades do mecanismo
+
+**O joelho só dispara na viragem.** É a diferença entre duas rectas separadas
+por `span` barras; assim que a subida dura mais do que `span`, as duas rectas
+voltam a ser a mesma e o joelho colapsa, mesmo com a média a subir a pique. É um
+impulso, não um estado — daí exposições de 2 a 27%.
+
+**O limiar de 25° quase nunca dispara.** Com ruído realista, uma tendência forte
+(1% de deriva por barra contra 0,8% de ruído) dá um joelho de pico a rondar os
+20°. O varrimento de 972 configurações escolheu sempre 5°.
+
+### O resultado
+
+| Timeframe | Regra | Retorno | IC95% | Exposição |
+|---|---|---|---|---|
+| 1h | sempre comprado | +0,045% | [−0,639%, +0,613%] | 100% |
+| 1h | declive | −0,069% | [−0,260%, +0,082%] | 24,8% |
+| 1h | **joelho** | +0,008% | [−0,255%, +0,207%] | 27,0% |
+| 1d | −declive | −0,068% | [−0,215%, +0,092%] | 33,6% |
+| 1d | **−joelho** | −0,031% | [−0,165%, +0,104%] | 40,8% |
+
+Nada significativo, e ao prazo diário as regras escolhidas foram as
+**invertidas** — o varrimento decidiu sozinho que o lado rentável era vender a
+média a subir.
+
+Medindo o sinal directamente, sem regra pelo meio:
+
+| Sinal | 1h (h=1/3/7) | 1d (h=1/3/5) |
+|---|---|---|
+| **joelho** | −0,0005 / −0,0006 / −0,0004 | +0,0034 / +0,0054 / +0,0086 |
+| ângulo | −0,0078 / −0,0162 / −0,0270 | +0,0172 / +0,0204 / +0,0274 |
+
+**O joelho é zero** — Spearman entre −0,0006 e +0,0086 sobre 790 mil
+observações. Nulo medido com poder, não falta de dados. O ângulo tem sinal
+pequeno e de **sentido instável** (reversão a 1h, momentum ao dia).
+
+### A moeda é neutra
+
+Determinista vs sorteada: médias que diferem em centésimos de ponto base,
+desvios-padrão em ~1%. Numa carteira de 158 acções sorteiam-se 158 moedas
+independentes por barra e a média converge para a probabilidade — a
+aleatoriedade desaparece na agregação. Numa posição única acrescentaria
+variância sem acrescentar retorno esperado.
+
+### O falso positivo, e a defesa que ficou
+
+Uma variante: `|ângulo|` como *força da tendência*. No teste, ao prazo diário,
+topo-menos-fundo de **+1,53% a 5 dias, IC95% [+0,70%, +2,54%]** — acima de zero.
+No **treino**, com quatro vezes mais dados: **+0,04%, IC [−0,17%, +0,28%]**.
+
+Um efeito que só existe nos últimos 20% da amostra é uma propriedade daquele
+período. `consistency()` fixa a verificação: antes de acreditar num resultado de
+teste, perguntar o que diz o treino — não para o escolher, para o descartar.
+
 ## Testes
 
 ```bash
@@ -845,6 +928,8 @@ src/patterns/           SUBSISTEMA DE PADROES GRAFICOS
 src/research/           EXPERIENCIAS (ver RESEARCH.md)
   fallen_universe.py    accoes que cairam do universo + filtro de liquidez
   survivorship.py       os quatro testes ao vies de sobrevivencia
+  tangent_angle.py      angulo da tangente a media movel, normalizado em
+                        volatilidade; varrimento, decis e treino-vs-teste
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia

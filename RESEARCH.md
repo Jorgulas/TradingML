@@ -837,6 +837,142 @@ foi o Jorge a apontar onde olhar.
 
 ---
 
+# Ronda 9 — o ângulo da tangente à média móvel
+
+Proposta do Jorge: desenhar a média móvel sobre o gráfico e, no último ponto,
+medir o **ângulo entre a recta do troço anterior e a do troço recente**. Média
+plana que passa a subir dá um "joelho" de +30°; se voltar a ficar plana, −30°.
+Limiar de 25° com zona morta, e acima dele uma **moeda enviesada** para o lado
+do joelho em vez de uma decisão seca.
+
+## Duas correcções que a ideia obriga
+
+**O ângulo precisa de normalização.** Um ângulo exige os dois eixos nas mesmas
+unidades, e preço e tempo não são. Uma acção de $500 e uma de $5 com o mesmo
+movimento relativo dão ângulos diferentes, e o "25°" passaria a depender da
+escala do gráfico. Aqui o declive é medido em **volatilidade por barra**: 45°
+significa "a média avança um movimento típico por barra", igual na AAPL e na KO.
+
+**O ângulo absoluto sozinho não acrescenta nada ao declive.** `arctan` é
+monótona, portanto "ângulo > 25°" é idêntico a "declive normalizado > 0,466".
+Testá-lo seria testar momentum com outro nome. Mas o **ângulo entre dois
+troços** não é transformação monótona de nada — depende dos dois declives ao
+mesmo tempo e mede **curvatura**. Isso é conteúdo genuinamente novo, e é o que
+esta ronda mede.
+
+## O que os testes de unidade encontraram antes dos dados
+
+**A minha primeira normalização estava errada.** Media a média sobre o preço e
+dividia por `volatilidade × preço`. Um teste verificou que uma subida
+perfeitamente constante devia dar joelho zero — e dava **16,7°**. O denominador
+andava durante a tendência e fabricava um joelho que não existia no gráfico. Em
+**log-preço** o declive já é um retorno por barra e o denominador é a
+volatilidade desse retorno: adimensional de verdade, e a tendência constante dá
+zero, como tem de dar.
+
+**O joelho só dispara no instante da viragem.** É a diferença entre duas rectas
+separadas por `span` barras: assim que a subida dura mais do que `span`, as duas
+rectas voltam a ser a mesma e o joelho colapsa — mesmo com a média a subir a
+pique. É um impulso curto, não um estado. Daí a exposição de 2,2% a 20°.
+
+**E o limiar de 25° quase nunca dispara.** Com ruído realista, uma tendência
+*forte* (1% de deriva por barra contra 0,8% de ruído) dá um joelho de pico a
+rondar os 20°. O varrimento escolheu sempre 5°.
+
+## O resultado
+
+Varrimento de **972 configurações** em cada timeframe (3 médias × 3 troços × 6
+limiares × 3 horizontes × regra normal e invertida), escolha no treino, medição
+no teste:
+
+| Timeframe | Regra escolhida | Retorno | IC95% | Exposição |
+|---|---|---|---|---|
+| 1h | sempre comprado (referência) | +0,045% | [−0,639%, +0,613%] | 100% |
+| 1h | declive | −0,069% | [−0,260%, +0,082%] | 24,8% |
+| 1h | **joelho** | **+0,008%** | [−0,255%, +0,207%] | 27,0% |
+| 1h | ambos | −0,031% | [−0,183%, +0,074%] | 14,9% |
+| 1d | −declive | −0,068% | [−0,215%, +0,092%] | 33,6% |
+| 1d | **−joelho** | **−0,031%** | [−0,165%, +0,104%] | 40,8% |
+| 1d | −ambos | −0,033% | [−0,112%, +0,045%] | 18,4% |
+
+Nada é significativo, e no prazo diário as três regras escolhidas foram as
+**invertidas** — o varrimento decidiu sozinho que o lado rentável era vender a
+média a subir, não comprá-la.
+
+## A medição que decide
+
+A conta de lucros mistura duas perguntas: *o sinal contém informação* e *a regra
+sabe extraí-la*. Um limiar mal posto afunda uma regra sem que o sinal tenha
+culpa. Medindo o sinal directamente, contra o retorno futuro:
+
+| Timeframe | Horizonte | `joelho` (direcção) | `ângulo` (direcção) |
+|---|---|---|---|
+| 1h | 1 | **−0,0005** | −0,0078 |
+| 1h | 3 | **−0,0006** | −0,0162 |
+| 1h | 7 | **−0,0004** | −0,0270 |
+| 1d | 1 | **+0,0034** | +0,0172 |
+| 1d | 3 | **+0,0054** | +0,0204 |
+| 1d | 5 | **+0,0086** | +0,0274 |
+
+**O joelho é zero.** Spearman entre −0,0006 e +0,0086 em seis combinações, sobre
+790 mil observações a 1h. Não é "pequeno de mais para medir" — é medido com
+muito poder e é zero. Os decis não são monótonos: formam um U, que é a
+assinatura de uma quantidade de magnitude, não de direcção.
+
+**O ângulo tem um sinal pequeno e de sentido instável**: −0,027 a 1h (reversão)
+e +0,027 ao dia (momentum). Sinais opostos no mesmo universo, e ao prazo diário
+troca também entre treino e teste. Não é utilizável.
+
+**A leitura de magnitude também falha.** `|joelho|` contra `|retorno|` dá +0,023
+a 1h e −0,048 ao dia. Troca de sinal entre timeframes: ruído.
+
+## O falso positivo que quase passou
+
+Uma variante construtiva: usar `|ângulo|` como **força da tendência** — estar
+numa acção em tendência forte, para qualquer lado, paga? No teste, ao prazo
+diário: topo-menos-fundo **+1,53% a 5 dias, IC95% [+0,70%, +2,54%]**,
+inteiramente acima de zero.
+
+No **treino**, que tem quatro vezes mais dados: **+0,04%, IC [−0,17%, +0,28%]**.
+
+Um efeito que só existe nos últimos 20% da amostra e desaparece nos 80% com mais
+poder estatístico é uma propriedade daquele período. A regra que daqui fica:
+*antes de acreditar num resultado de teste, perguntar o que diz o treino — não
+para o escolher, para o descartar*. Está fixada em `consistency()`.
+
+## E a moeda?
+
+| Regra | Determinista | Com moeda | Desvio det. | Desvio moeda |
+|---|---|---|---|---|
+| declive | −0,0689% | −0,0726% | 1,5412% | 1,5423% |
+| joelho | +0,0075% | +0,0180% | 1,6822% | 1,6939% |
+| ambos | −0,0305% | −0,0405% | 1,1739% | 1,1899% |
+
+**Exactamente neutra**, e por uma razão estrutural: numa carteira de 158 acções
+sorteiam-se 158 moedas independentes por barra, e a média delas converge para a
+probabilidade. A aleatoriedade desaparece na agregação. Numa posição única a
+moeda acrescentaria variância sem acrescentar retorno esperado — não é um erro
+da ideia, é o que uma decisão probabilística faz quando a esperança é a mesma.
+
+## O que fica da ideia
+
+Negativo no essencial: **a curvatura da média móvel não prevê direcção**, e a
+regra proposta não bate estar sempre comprado em nenhum dos dois timeframes.
+
+Mas três coisas ficam, e não são de consolação:
+
+1. **A normalização em unidades de volatilidade** é o que torna qualquer limiar
+   angular comparável entre acções. Está em `normalised_slope()` e serve
+   qualquer sinal geométrico futuro.
+2. **A verificação treino-versus-teste** (`consistency()`) nasceu aqui e apanhou
+   um falso positivo com intervalo de confiança acima de zero.
+3. **O varrimento foi dominado pelo joelho** — 19 das 30 melhores configurações
+   no treino a 1h — e **nada sobreviveu**. É a demonstração mais limpa que este
+   projecto tem do que 972 comparações fazem a quem só olha para o melhor
+   resultado.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -850,6 +986,7 @@ a inspecção mais fina que o explicou.**
 | 4 | Alarme de risco 2,98× melhor que o acaso | Não reduz variância nenhuma; a previsão correlaciona 0,78 com a volatilidade recente |
 | 7 | Tabela de verdade a render +0,45% contra +0,38% do melhor sinal isolado | A diferença (0,03%) é menor do que o que ela se move ao trocar a semente (0,14%) |
 | 8 | Sinal transversal a +0,69% com intervalo acima de zero | Metade era a lista de acções: repondo as que caíram do índice sobra +0,35%, e no universo completo +0,24% com o zero lá dentro |
+| 9 | Joelho da média móvel a dominar 19 das 30 melhores configurações do treino | Spearman −0,0005 contra a direcção futura: zero medido com 790 mil observações, e nada sobreviveu ao teste |
 
 ## O que ficou estabelecido
 
@@ -862,16 +999,19 @@ a inspecção mais fina que o explicou.**
 3. **Nada aqui é negociável.** Nem por opções (o lucro está em eventos já
    cobrados), nem por execução (uma regra de relógio ganha), nem por
    dimensionamento (a volatilidade recente já dá tudo).
+4. **A curvatura da média móvel não prevê direcção** (ronda 9). Spearman entre
+   −0,0006 e +0,0086 em dois timeframes e três horizontes, sobre 790 mil
+   observações. É um nulo medido com poder, não uma falta de dados.
 
 **Positivo, e real:**
 
-4. **A volatilidade é previsível** por sazonalidade intradiária — e essa
+5. **A volatilidade é previsível** por sazonalidade intradiária — e essa
    sazonalidade é **estável**: um perfil de há 12 meses funciona tão bem como
    um do mês passado (ronda 5). É a descoberta durável do projecto.
-5. **Existe sinal residual genuíno** depois de tirar calendário e inércia:
+6. **Existe sinal residual genuíno** depois de tirar calendário e inércia:
    Spearman 0,17 a 1h, IC95% [0,153, 0,185].
-6. **O modelo detecta eventos de cauda** 2,98× melhor que o acaso.
-7. **Existe um sinal transversal de curto prazo** (ronda 7), mas **cerca de
+7. **O modelo detecta eventos de cauda** 2,98× melhor que o acaso.
+8. **Existe um sinal transversal de curto prazo** (ronda 7), mas **cerca de
    metade do que lhe atribuí era viés de sobrevivência** (ronda 8). Medido no
    universo de sobreviventes dava +0,694%; repondo as acções que caíram do
    índice sobra +0,353%, e no universo mais completo possível +0,241% com o
@@ -880,7 +1020,7 @@ a inspecção mais fina que o explicou.**
    si — não de prever cada uma ao longo do tempo — e combinar algoritmos por
    cima dele não acrescenta nada demonstrável.
 
-O ponto 6 é competência real que não se converteu em valor em nenhuma das três
+O ponto 7 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.
 
 ## O que este projecto realmente demonstra
