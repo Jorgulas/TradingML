@@ -973,6 +973,96 @@ Mas três coisas ficam, e não são de consolação:
 
 ---
 
+# Ronda 10 — o joelho ao minuto, que era o enquadramento original
+
+A ronda 9 mediu o ângulo da tangente a 1 hora e ao dia. Mas o pedido do Jorge
+era *"para o trading real-time"*, e ao minuto três coisas mudam mesmo: a média
+move-se muito mais depressa, o joelho dispara muitas mais vezes, e os custos
+passam a ser da ordem de grandeza do movimento.
+
+## Três decisões que este prazo obriga
+
+**Nada atravessa a noite.** Uma média de 20 barras na quinta barra do dia usaria
+15 barras de ontem, e o `diff` apanharia o salto overnight — que pode ser 1% e
+não é um movimento de um minuto. Medi a contaminação: com um gap sistemático de
++2%, a versão ingénua dá um ângulo médio de **+6,73°** nas primeiras barras de
+cada sessão, contra **−0,48°** na versão que respeita a sessão. A meio do dia as
+duas coincidem ao décimo-quinto decimal. A regra estaria a negociar o gap
+disfarçado de joelho.
+
+**Não há divisão treino/teste honesta ao minuto.** São 9 dias distintos. Cortar
+80/20 daria 7 dias para escolher e 2 para medir. Por isso **não se escolhe**:
+reporta-se a grelha inteira de 54 células por prazo. Uma grelha completa não
+pode ser acusada de ter escolhido a melhor.
+
+**A entrada é atrasada uma barra.** O sinal vê o fecho da barra e a posição só
+abre na seguinte — é o que acontece na realidade, e é também o teste ao **salto
+bid-ask**, o contaminante clássico deste prazo.
+
+## O que apareceu ao minuto
+
+Ao contrário de 1h e do prazo diário, ao minuto apareceu sinal: **17 das 27
+células do joelho com intervalo de confiança fora do zero**. E o salto bid-ask
+ficou descartado — o efeito *sobrevive* ao atraso de uma barra (16/27 → 17/27).
+
+Melhor ainda: o sinal do IC **não era aleatório entre configurações**. Era
+positivo em todas as que tinham troço ≤ média e negativo em todas as outras, sem
+uma única excepção:
+
+| Razão troço/média | 0,08 | 0,17 | 0,25 | 0,50 | 1,00 | 1,50 | 3,00 |
+|---|---|---|---|---|---|---|---|
+| IC médio | +0,005 | +0,009 | +0,021 | +0,016 | +0,020 | **−0,025** | **−0,026** |
+
+A fronteira cai exactamente em troço = média, que é onde as duas rectas deixam
+de partilhar barras e passam a comparar troços de preço disjuntos. Tinha uma
+explicação mecânica plausível e **parecia estrutural**.
+
+## O teste que decide
+
+Se a fronteira é estrutural, tem de aparecer também a 2 e a 5 minutos, que têm
+30 e 71 dias em vez de 9.
+
+| Prazo | Dias | troço ≤ média | troço > média |
+|---|---|---|---|
+| 1m | 9 | **+0,0146** (20/21 positivas) | −0,0252 (0/6) |
+| 2m | 30 | **−0,0016** (9/24) | −0,0085 (0/3) |
+| 5m | 71 | **−0,0001** (12/24) | −0,0009 (0/3) |
+
+**Não replica.** A região que a 1 minuto tinha 20 de 21 células positivas passa a
+9 de 24 e a 12 de 24 — indistinguível de moedas ao ar — e o IC médio cai de
++0,0146 para −0,0016 e −0,0001.
+
+O padrão de 1 minuto é uma propriedade daqueles 9 dias. Os prazos com três e
+oito vezes mais dias dizem zero.
+
+## E os custos decidiriam de qualquer maneira
+
+| Prazo | Movimento típico | Ida-e-volta | Custo / movimento | Bruto / ciclo | Líquido / ciclo |
+|---|---|---|---|---|---|
+| 1m | 0,0915% | 0,0600% | **65,5%** | +0,0051% | +0,0013% |
+| 2m | 0,1034% | 0,0600% | 58,0% | +0,0005% | −0,0018% |
+| 5m | 0,1657% | 0,0600% | 36,2% | −0,0023% | −0,0062% |
+
+Ao minuto, o spread de ida-e-volta come **dois terços do movimento típico**. Um
+sinal teria de acertar de forma esmagadora só para empatar. Este número não
+depende de o joelho funcionar ou não: é a aritmética do prazo.
+
+## A conclusão
+
+O joelho ao minuto não funciona, e a maneira como falha é mais instrutiva do que
+a maneira como falhou a 1 hora. A 1 hora era um zero liso — Spearman −0,0005 e
+nada mais a dizer. Ao minuto apareceu um padrão com intervalo de confiança fora
+do zero em 17 células, com uma fronteira nítida e uma explicação mecânica
+convincente — e evaporou-se assim que houve mais dias.
+
+É a segunda vez em duas rondas que um resultado sobrevive ao intervalo de
+confiança e morre na réplica. Na ronda 9 foi o treino a desmentir o teste; aqui
+foi um prazo com mais dias a desmentir outro com menos. **O intervalo de
+confiança responde "isto podia ser acaso?"; só a réplica responde "isto volta a
+acontecer?"** — e as duas perguntas não são a mesma.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -987,6 +1077,7 @@ a inspecção mais fina que o explicou.**
 | 7 | Tabela de verdade a render +0,45% contra +0,38% do melhor sinal isolado | A diferença (0,03%) é menor do que o que ela se move ao trocar a semente (0,14%) |
 | 8 | Sinal transversal a +0,69% com intervalo acima de zero | Metade era a lista de acções: repondo as que caíram do índice sobra +0,35%, e no universo completo +0,24% com o zero lá dentro |
 | 9 | Joelho da média móvel a dominar 19 das 30 melhores configurações do treino | Spearman −0,0005 contra a direcção futura: zero medido com 790 mil observações, e nada sobreviveu ao teste |
+| 10 | Ao minuto, 17 de 27 células com intervalo fora do zero e uma fronteira nítida em troço = média | Não replica: a 2m e 5m, com 3x e 8x mais dias, a mesma região dá 9/24 e 12/24 positivas — moedas ao ar |
 
 ## O que ficou estabelecido
 
@@ -999,9 +1090,12 @@ a inspecção mais fina que o explicou.**
 3. **Nada aqui é negociável.** Nem por opções (o lucro está em eventos já
    cobrados), nem por execução (uma regra de relógio ganha), nem por
    dimensionamento (a volatilidade recente já dá tudo).
-4. **A curvatura da média móvel não prevê direcção** (ronda 9). Spearman entre
-   −0,0006 e +0,0086 em dois timeframes e três horizontes, sobre 790 mil
-   observações. É um nulo medido com poder, não uma falta de dados.
+4. **A curvatura da média móvel não prevê direcção** (rondas 9 e 10). Spearman
+   entre −0,0006 e +0,0086 a 1 hora e ao dia, sobre 790 mil observações. Ao
+   minuto aparece um padrão forte e com fronteira nítida que **não replica** a 2
+   e 5 minutos, onde há três e oito vezes mais dias. E ao minuto o spread de
+   ida-e-volta come 65% do movimento típico, o que decidiria o prazo de qualquer
+   maneira.
 
 **Positivo, e real:**
 

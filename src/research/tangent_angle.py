@@ -74,7 +74,8 @@ def normalised_slope(series: pd.Series, span: int, scale: pd.Series) -> pd.Serie
     return rise / scale.replace(0, np.nan)
 
 
-def build(bars: pd.DataFrame, ma_window: int, span: int) -> pd.DataFrame:
+def build(bars: pd.DataFrame, ma_window: int, span: int,
+          session_aware: bool = False) -> pd.DataFrame:
     """Angulo actual, angulo anterior, e o joelho entre eles.
 
     EM LOG-PRECO, e nao em preco. A primeira versao media a media sobre o preco
@@ -89,17 +90,36 @@ def build(bars: pd.DataFrame, ma_window: int, span: int) -> pd.DataFrame:
     tem de dar."""
     close = bars["close"]
     log_price = np.log(close)
-    average = log_price.rolling(ma_window, min_periods=ma_window).mean()
 
-    # Escala: desvio-padrao do retorno logaritmico de uma barra. Janela longa
-    # para a propria escala nao oscilar e fabricar sinal.
-    scale = log_price.diff().rolling(60, min_periods=60).std()
-
-    slope_now = normalised_slope(average, span, scale)
-    angle_now = np.degrees(np.arctan(slope_now))
-    # O troco ANTERIOR e' o mesmo declive atrasado `span` barras: e' a recta que
-    # ia ate' onde a recta actual comeca, sem sobreposicao entre as duas.
-    angle_previous = angle_now.shift(span)
+    if session_aware:
+        # INTRADIA: nada pode atravessar a noite.
+        #
+        # Sem isto, uma media de 20 barras na quinta barra do dia usa 15 barras
+        # de ontem, e o `diff` apanha o salto overnight -- que pode ser 1% e nao
+        # e' um movimento de um minuto. O angulo resultante dispara para o tecto
+        # todas as manhas, sempre no mesmo sentido do gap, e a regra passaria a
+        # negociar o gap disfarcado de joelho.
+        session = pd.Series(bars.index.normalize(), index=bars.index)
+        grouped = log_price.groupby(session)
+        average = grouped.transform(
+            lambda s: s.rolling(ma_window, min_periods=ma_window).mean())
+        returns = grouped.transform(lambda s: s.diff())
+        scale = returns.groupby(session).transform(
+            lambda s: s.rolling(60, min_periods=20).std())
+        rise = average.groupby(session).transform(lambda s: s.diff(span)) / span
+        slope_now = rise / scale.replace(0, np.nan)
+        angle_now = np.degrees(np.arctan(slope_now))
+        angle_previous = angle_now.groupby(session).shift(span)
+    else:
+        average = log_price.rolling(ma_window, min_periods=ma_window).mean()
+        # Escala: desvio-padrao do retorno logaritmico de uma barra. Janela
+        # longa para a propria escala nao oscilar e fabricar sinal.
+        scale = log_price.diff().rolling(60, min_periods=60).std()
+        slope_now = normalised_slope(average, span, scale)
+        angle_now = np.degrees(np.arctan(slope_now))
+        # O troco ANTERIOR e' o mesmo declive atrasado `span` barras: a recta
+        # que ia ate' onde a actual comeca, sem sobreposicao entre as duas.
+        angle_previous = angle_now.shift(span)
 
     return pd.DataFrame({
         "close": close,
@@ -138,7 +158,8 @@ def positions(frame: pd.DataFrame, rule: str, threshold: float) -> pd.Series:
 
 
 def panel(conn, timeframe: str, ma_window: int, span: int,
-          horizons, tickers=None) -> pd.DataFrame:
+          horizons, tickers=None, session_aware: bool = False,
+          min_bars: int = 300, lag: int = 0) -> pd.DataFrame:
     """Um painel com o sinal e o retorno futuro, para todos os tickers.
 
     O retorno e' em EXCESSO sobre o indice. Sem isso, uma regra que esteja
@@ -151,15 +172,29 @@ def panel(conn, timeframe: str, ma_window: int, span: int,
     frames = []
     for ticker in tickers:
         bars = load_bars(conn, ticker, timeframe)
-        if len(bars) < 300 or is_corrupt(bars):
+        if len(bars) < min_bars or is_corrupt(bars):
             continue
 
-        piece = build(bars, ma_window, span)
+        piece = build(bars, ma_window, span, session_aware=session_aware)
         aligned = market.reindex(bars.index).ffill() if market is not None else None
+        session = pd.Series(bars.index.normalize(), index=bars.index)
         for horizon in horizons:
-            forward = bars["close"].shift(-horizon) / bars["close"] - 1
+            # `lag` atrasa a ENTRADA: o sinal ve' o fecho da barra t e a posicao
+            # so' abre em t+lag. Com lag=1 e' o que acontece na realidade -- nao
+            # se transacciona no preco que se acabou de observar -- e e' tambem
+            # o teste ao salto bid-ask, que a 1 minuto e' o contaminante
+            # classico: o preco alterna entre compra e venda e fabrica
+            # previsibilidade que desaparece assim que se salta uma barra.
+            entry = bars["close"].shift(-lag)
+            exit_price = bars["close"].shift(-(lag + horizon))
+            forward = exit_price / entry - 1
             if aligned is not None:
-                forward = forward - (aligned.shift(-horizon) / aligned - 1)
+                forward = forward - (aligned.shift(-(lag + horizon))
+                                     / aligned.shift(-lag) - 1)
+            if session_aware:
+                # O retorno futuro tambem nao pode saltar para o dia seguinte:
+                # seria creditar ao sinal um gap overnight que ele nao previu.
+                forward = forward.where(session.shift(-(lag + horizon)) == session)
             piece[f"forward_{horizon}"] = forward
 
         piece["ticker"] = ticker

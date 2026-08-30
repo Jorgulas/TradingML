@@ -884,6 +884,42 @@ Um efeito que só existe nos últimos 20% da amostra é uma propriedade daquele
 período. `consistency()` fixa a verificação: antes de acreditar num resultado de
 teste, perguntar o que diz o treino — não para o escolher, para o descartar.
 
+### Ao minuto (trading em tempo real)
+
+```bash
+py src/research/tangent_intraday.py
+```
+
+O enquadramento original da ideia. Ao minuto três coisas mudam: a média move-se
+muito mais depressa, o joelho dispara mais vezes, e os custos passam a ser da
+ordem de grandeza do movimento.
+
+**Nada atravessa a noite.** Uma média de 20 barras na quinta barra do dia usaria
+15 barras de ontem e apanharia o salto overnight. Medido: com um gap sistemático
+de +2%, a versão ingénua dá **+6,73°** de ângulo médio na abertura contra
+**−0,48°** na versão que respeita a sessão; a meio do dia coincidem exactamente.
+
+**Não há divisão treino/teste ao minuto** (9 dias). Por isso reporta-se a grelha
+inteira de 54 células por prazo em vez de escolher a melhor. **A entrada é
+atrasada uma barra**, o que é realista e serve de teste ao salto bid-ask.
+
+Ao minuto apareceu sinal — 17 de 27 células do joelho com intervalo fora do
+zero, e o salto bid-ask descartado (sobrevive ao atraso). E o sinal do IC não era
+aleatório: positivo em todas as configurações com troço ≤ média, negativo em
+todas as outras, com a fronteira exactamente onde as duas rectas deixam de
+partilhar barras.
+
+Mas **não replica**:
+
+| Prazo | Dias | troço ≤ média | troço > média |
+|---|---|---|---|
+| 1m | 9 | **+0,0146** (20/21 positivas) | −0,0252 (0/6) |
+| 2m | 30 | **−0,0016** (9/24) | −0,0085 (0/3) |
+| 5m | 71 | **−0,0001** (12/24) | −0,0009 (0/3) |
+
+E os custos decidiriam de qualquer maneira: ao minuto o spread de ida-e-volta
+(0,060%) come **65,5%** do movimento típico em excesso (0,092%).
+
 ## Testes
 
 ```bash
@@ -930,6 +966,8 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
   survivorship.py       os quatro testes ao vies de sobrevivencia
   tangent_angle.py      angulo da tangente a media movel, normalizado em
                         volatilidade; varrimento, decis e treino-vs-teste
+  tangent_intraday.py   o mesmo ao minuto: sessao fechada, atraso de entrada,
+                        grelha completa e replica entre 1m/2m/5m
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia
