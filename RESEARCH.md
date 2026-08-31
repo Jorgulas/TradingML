@@ -1063,6 +1063,104 @@ acontecer?"** — e as duas perguntas não são a mesma.
 
 ---
 
+# Ronda 11 — fluxo assinado aproximado, e o artefacto de cotação medido
+
+Veio da pesquisa sobre a estratégia de order flow que ganhou um contest mensal
+da Robbins. A estratégia em si é menos interessante do que a pergunta que
+levantou: a literatura de microestrutura (Cont, Kukanov e Stoikov, 2014) mostra
+que o **desequilíbrio de fluxo de ordens** prevê variações de preço a prazos
+curtos, de forma quase linear e estável entre acções. A ronda 10 não encontrou
+nada ao minuto. A diferença pode ser exactamente a categoria de dados que este
+projecto nunca teve.
+
+O que sobra numa barra OHLCV é o **close location value**:
+
+    clv = ((fecho − mínimo) − (máximo − fecho)) / (máximo − mínimo)
+
++1 se fechou no topo do próprio intervalo, −1 se no fundo. Multiplicado pelo
+volume, é o bloco da linha de Acumulação/Distribuição e a aproximação clássica
+de volume assinado a partir de OHLCV.
+
+## A armadilha que invalidaria tudo
+
+A métrica é a correlação **transversal** dentro de cada barra. Em bruto,
+`clv × volume` põe sempre a AAPL no topo por ela negociar mais, não por estar a
+comprar — ordenar-se-ia capitalização bolsista disfarçada de fluxo. O volume tem
+de ser dividido pela média recente do **próprio** ticker. Há um teste que o fixa:
+duas acções com padrões de fecho idênticos e volumes a diferir 100× têm de dar
+exactamente o mesmo sinal.
+
+## O resultado principal: o artefacto medido
+
+Uma barra que fecha no topo do intervalo fechou provavelmente no preço de venda,
+e a seguinte tende a voltar ao de compra. Isso produz previsibilidade que não se
+pode negociar. Mede-se entrando uma barra depois:
+
+| Prazo | Sinal | IC (entrada imediata) | IC (uma barra depois) | Quanto era artefacto |
+|---|---|---|---|---|
+| 1m | clv | **−0,0406** | −0,0049 | **88%** |
+| 1m | ofi | −0,0365 | −0,0052 | 86% |
+| 2m | clv | −0,0312 | −0,0060 | 81% |
+| 5m | clv | −0,0182 | −0,0002 | **99%** |
+
+O IC de −0,041 a 1 minuto é **oito vezes maior** do que qualquer coisa que o
+joelho da ronda 10 produziu. Lido sem o atraso de entrada, seria o resultado mais
+forte do projecto inteiro. É quase todo salto bid-ask — e a assinatura confirma-o:
+o artefacto encolhe à medida que a barra engorda (88% → 81% → 99% do sinal, com o
+IC bruto a cair de −0,041 para −0,018), que é exactamente como o spread se comporta
+enquanto fracção do intervalo da barra.
+
+## O que sobrevive
+
+As acumulações longas guardam mais do seu (pequeno) sinal, porque somar 20 ou 60
+barras faz a média do salto. E o `ofi_20` é o **primeiro sinal deste projecto cujo
+sentido replica nos três prazos**:
+
+| Sinal | 1m (11 dias) | 2m (32 dias) | 5m (73 dias) | Mesmo sentido? |
+|---|---|---|---|---|
+| clv | −0,0049 | −0,0060 | −0,0002 | sim |
+| ofi | −0,0052 | −0,0056 | +0,0003 | não |
+| **ofi_20** | **−0,0027** | **−0,0072** | **−0,0060** | **sim** |
+| ofi_60 | −0,0092 | −0,0095 | — | sim |
+
+Fluxo acumulado antecede **reversão**, não continuação.
+
+## O erro que cometi, e que era do sinal contrário ao habitual
+
+A primeira carteira ia sempre comprada no topo do ranking e vendida no fundo. Mas
+o IC é negativo — logo ela negociava ao contrário, e reportava prejuízo naquilo
+que era o sinal a funcionar. Um bruto de −0,06% lido como fracasso era +0,06%
+lido ao direito.
+
+Corrigido sem olhar para a resposta: o sentido é estimado na primeira fatia do
+período e aplicado à segunda.
+
+| Prazo | Treino | Teste | Sentido | Bruto/ciclo | Custo | Líquido |
+|---|---|---|---|---|---|---|
+| 1m | 8d | 4d | +1 | −0,0142% | 0,0225% | −0,0367% |
+| 2m | 23d | 10d | **−1** | **+0,0036%** | 0,0166% | −0,0130% |
+| 5m | 51d | 23d | **−1** | **+0,0016%** | 0,0211% | −0,0195% |
+
+A 2 e 5 minutos o sentido escolhido no treino produz **bruto positivo no teste**.
+O sinal é real. Mas o custo é **5 a 13 vezes** o ganho bruto.
+
+## A conclusão, e o que ela diz sobre os dados que faltam
+
+Para pagar a execução, o IC teria de ser 5 a 13 vezes maior — da ordem de 0,03 a
+0,08 em vez de 0,006. É aproximadamente a magnitude que a literatura reporta para
+**fluxo de ordens a sério**, com lado agressor e profundidade do livro.
+
+Ou seja: o proxy retém talvez um décimo do que os dados verdadeiros dariam, o que
+é coerente com ele ser uma aproximação muito lossy. E dá um número concreto ao que
+os dados reais teriam de comprar, em vez de uma intuição.
+
+**É também a primeira vez em onze rondas que um sinal replica em sentido e produz
+bruto positivo fora da amostra.** Não chega — morre nos custos, e por uma margem
+larga. Mas é uma falha de magnitude, não de existência, e essas são as únicas que
+se resolvem comprando dados melhores.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1078,6 +1176,7 @@ a inspecção mais fina que o explicou.**
 | 8 | Sinal transversal a +0,69% com intervalo acima de zero | Metade era a lista de acções: repondo as que caíram do índice sobra +0,35%, e no universo completo +0,24% com o zero lá dentro |
 | 9 | Joelho da média móvel a dominar 19 das 30 melhores configurações do treino | Spearman −0,0005 contra a direcção futura: zero medido com 790 mil observações, e nada sobreviveu ao teste |
 | 10 | Ao minuto, 17 de 27 células com intervalo fora do zero e uma fronteira nítida em troço = média | Não replica: a 2m e 5m, com 3x e 8x mais dias, a mesma região dá 9/24 e 12/24 positivas — moedas ao ar |
+| 11 | CLV com IC de −0,041 ao minuto, oito vezes qualquer coisa anterior | 88% era salto bid-ask: entra-se uma barra depois e sobra −0,005. O que resta replica nos três prazos mas os custos são 5 a 13× o ganho |
 
 ## O que ficou estabelecido
 
@@ -1098,6 +1197,13 @@ a inspecção mais fina que o explicou.**
    maneira.
 
 **Positivo, e real:**
+
+0. **O fluxo acumulado antecede reversão** (ronda 11), e é o único sinal deste
+   projecto cujo sentido replica em três prazos independentes e produz bruto
+   positivo fora da amostra. Mas o custo de execução é 5 a 13× o ganho: para
+   pagar, o IC teria de ser 0,03–0,08 em vez de 0,006 — que é a ordem de
+   grandeza reportada para fluxo de ordens verdadeiro, com lado agressor e
+   profundidade do livro. É uma falha de magnitude, não de existência.
 
 5. **A volatilidade é previsível** por sazonalidade intradiária — e essa
    sazonalidade é **estável**: um perfil de há 12 meses funciona tão bem como

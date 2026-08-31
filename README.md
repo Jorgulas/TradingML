@@ -920,6 +920,44 @@ Mas **não replica**:
 E os custos decidiriam de qualquer maneira: ao minuto o spread de ida-e-volta
 (0,060%) come **65,5%** do movimento típico em excesso (0,092%).
 
+## Fluxo assinado aproximado (CLV × volume)
+
+```bash
+py src/research/order_flow_proxy.py
+```
+
+Veio de uma pergunta sobre order flow: a literatura de microestrutura (Cont,
+Kukanov e Stoikov, 2014) mostra que o desequilíbrio de fluxo de ordens prevê
+variações de preço a prazos curtos. A ronda 10 não encontrou nada ao minuto — e a
+diferença pode ser a categoria de dados que este projecto nunca teve.
+
+O que sobra numa barra OHLCV é o **close location value** (+1 se fechou no topo do
+próprio intervalo, −1 se no fundo), vezes o volume.
+
+**A armadilha:** em bruto, `clv × volume` põe sempre a AAPL no topo por negociar
+mais. O volume tem de ser normalizado pela média do próprio ticker, senão
+ordena-se capitalização bolsista disfarçada de fluxo.
+
+**O resultado principal** é o artefacto de cotação, medido entrando uma barra
+depois:
+
+| Prazo | IC (entrada imediata) | IC (uma barra depois) | Era artefacto |
+|---|---|---|---|
+| 1m | **−0,0406** | −0,0049 | **88%** |
+| 2m | −0,0312 | −0,0060 | 81% |
+| 5m | −0,0182 | −0,0002 | **99%** |
+
+O −0,041 a 1 minuto é oito vezes maior do que qualquer coisa que o joelho
+produziu. Lido sem o atraso, seria o melhor resultado do projecto. É quase todo
+salto bid-ask.
+
+**O que sobrevive** é o fluxo acumulado (`ofi_20`), com o mesmo sentido nos três
+prazos (−0,0027 / −0,0072 / −0,0060) — antecede reversão. Com o sentido estimado
+no treino e medido no resto, o bruto é positivo a 2m (+0,0036%) e 5m (+0,0016%),
+mas o custo de execução é **5 a 13× maior**. Para pagar, o IC teria de ser
+0,03–0,08 — a ordem de grandeza que a literatura reporta para fluxo de ordens a
+sério, com lado agressor e profundidade do livro.
+
 ## Testes
 
 ```bash
@@ -968,6 +1006,8 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
                         volatilidade; varrimento, decis e treino-vs-teste
   tangent_intraday.py   o mesmo ao minuto: sessao fechada, atraso de entrada,
                         grelha completa e replica entre 1m/2m/5m
+  order_flow_proxy.py   fluxo assinado aproximado (CLV x volume normalizado),
+                        teste ao salto bid-ask e liquido de custos
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia
