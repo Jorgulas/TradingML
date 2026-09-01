@@ -1019,6 +1019,40 @@ abaixo dessa linha em todos os pesos, e a distância cresce.
 Nos 15 piores períodos do índice (média −2,33%) o sinal rendeu −0,27%. Não é
 hedge: não faz nada de útil quando faria falta.
 
+### O sinal em regimes de queda
+
+```bash
+py src/research/regime_conditional.py
+```
+
+Um livro transversal vive de **dispersão** entre acções, e a dispersão dispara
+quando o mercado cai. A hipótese é razoável.
+
+A distinção que faz a experiência: a condição **contemporânea** ("nos períodos em
+que o índice caiu") é diagnóstico e **não é negociável** — no momento de decidir
+não se sabe. A condição **ex-ante** ("quando o mercado já vinha a cair") usa só
+informação disponível na altura e é a única que dá uma regra.
+
+| Regime ex-ante | Períodos | Dentro | Fora | Anual dentro | p placebo |
+|---|---|---|---|---|---|
+| Abaixo da MA200 | 11 | **+0,160%** | −0,050% | **+8,06%** | 0,469 |
+| Abaixo da MA50 | 24 | +0,138% | −0,079% | +6,94% | 0,325 |
+| Retorno 20d negativo | 31 | +0,136% | −0,101% | +6,85% | 0,219 |
+| Em drawdown > 5% | 13 | −0,123% | −0,011% | −6,18% | 0,644 |
+
+Três dos quatro apontam no sentido da hipótese. Nenhum chega perto de
+significância — e desta vez **o nulo é diferente**: o mínimo detectável é 3 a 6×
+maior do que o efeito, ou seja a amostra é **cega**, não está a medir ausência.
+Faltariam 13 a 42 anos de histórico.
+
+Testei também se o livro carregava **beta residual**, que explicaria a perda
+contemporânea nas quedas. Não carrega: beta +0,031 ± 0,048 (p = 0,512), R²
+0,0045. A hipótese era minha e estava errada.
+
+Defesas contra fatiar até encontrar: regimes clássicos definidos à partida,
+Bonferroni, e um **placebo por deslocamento circular** que preserva a estrutura
+de blocos dos regimes em vez de assumir independência entre períodos.
+
 ## Testes
 
 ```bash
@@ -1073,6 +1107,8 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
                         confronto directo com custos e composicao
   blend_with_index.py   o sinal como diversificador: condicao de Sharpe, ponto
                         de equilibrio e comportamento nas quedas do indice
+  regime_conditional.py  o sinal em regimes de queda: ex-ante contra
+                        contemporaneo, placebo circular e poder estatistico
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia

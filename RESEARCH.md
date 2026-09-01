@@ -1342,6 +1342,94 @@ A conclusão da ronda 12 mantém-se e ganha uma segunda perna: o sinal não bate
 
 ---
 
+# Ronda 14 — o sinal em regimes de queda, e a primeira amostra genuinamente cega
+
+Pergunta do Jorge: *"testa o sinal só em regimes de queda do índice"*.
+
+A hipótese é razoável e não é pesca. Um livro transversal vive de **dispersão**
+entre acções, e a dispersão dispara quando o mercado cai: em pânico as acções
+deixam de andar todas juntas, e há mais para ordenar. Se o sinal existe em algum
+lado, é plausível que seja lá.
+
+## A distinção que faz a experiência
+
+| | O que pergunta | Serve para |
+|---|---|---|
+| **Contemporânea** | "nos períodos em que o índice caiu, o sinal rendeu quanto?" | Diagnóstico. **Não é negociável** — no momento de decidir não se sabe que este período vai ser dos maus |
+| **Ex-ante** | "quando o mercado **já vinha** a cair, rendeu quanto?" | Só informação disponível na altura. É a única que dá uma regra que se pode seguir |
+
+Alarguei o período de teste usando 4 trimestres de treino em vez de 6: cada
+modelo fica com menos histórico, mas o teste passa de 72 para 98 períodos e
+inclui dois trimestres negativos em vez de um. Para uma pergunta sobre quedas,
+ter quedas para medir pesa mais.
+
+## O resultado ex-ante
+
+| Regime | Períodos | Dentro | Fora | Anual dentro | p Welch | p placebo |
+|---|---|---|---|---|---|---|
+| Abaixo da MA200 | 11 | **+0,160%** | −0,050% | **+8,06%** | 0,621 | 0,469 |
+| Abaixo da MA50 | 24 | **+0,138%** | −0,079% | +6,94% | 0,362 | 0,325 |
+| Retorno 20d negativo | 31 | **+0,136%** | −0,101% | +6,85% | 0,293 | 0,219 |
+| Em drawdown > 5% | 13 | −0,123% | −0,011% | −6,18% | 0,799 | 0,644 |
+
+**Três dos quatro regimes apontam no sentido da hipótese**, com o sinal a render
++7% a +8% anualizados dentro do regime contra ligeiramente negativo fora. O
+quarto — o mais severo — aponta ao contrário.
+
+Nenhum chega perto de significância. Bonferroni com 4 regimes exigiria p <
+0,0125; o melhor é 0,293. E o placebo por deslocamento circular, que preserva a
+estrutura de blocos dos regimes em vez de assumir independência, concorda.
+
+## E desta vez o nulo é diferente
+
+| Regime | Efeito | Mínimo detectável | Rácio | Anos precisos |
+|---|---|---|---|---|
+| Abaixo da MA200 | +0,160% | 0,739% | 4,6× | **42** |
+| Abaixo da MA50 | +0,138% | 0,383% | 2,8× | 15 |
+| Retorno 20d negativo | +0,136% | 0,352% | 2,6× | **13** |
+| Em drawdown > 5% | −0,123% | 0,766% | 6,2× | 76 |
+
+**Nenhum destes efeitos é maior do que o seu próprio mínimo detectável.** Isto
+não é um nulo medido — é uma amostra cega. Nas rondas 9 e 10 tinha poder para
+afirmar ausência; aqui não posso distinguir "o efeito não existe" de "não o
+consigo ver". Seriam precisos 13 a 42 anos de histórico.
+
+## Uma hipótese minha que se revelou falsa
+
+A condição contemporânea mostrou o sinal a **perder** quando o índice cai
+(−0,309% contra +0,160% quando sobe, p Welch 0,031, placebo 0,053). A explicação
+natural seria **beta residual**: pesar as duas pernas por igual não garante
+neutralidade, e um livro com beta escondido perderia exactamente quando devia
+proteger. Se fosse verdade, a correcção era óbvia — pesar as pernas por beta.
+
+Medi:
+
+| | Valor |
+|---|---|
+| Beta ao índice | **+0,0314** (erro-padrão 0,0477, p = 0,512) |
+| R² | 0,0045 |
+| Correlação | +0,067 |
+| Numa queda de 2% do índice, o beta explicaria | −0,063% |
+
+**O livro é mesmo neutro.** A diferença contemporânea de −0,469% não vem daí — o
+beta explicaria um oitavo dela. E com 5 comparações feitas nesta ronda, um p de
+0,031 não sobrevive à correcção. É ruído.
+
+## A resposta
+
+Não sei, e é a primeira vez em catorze rondas que essa é a resposta honesta.
+
+A direcção é encorajadora — três de quatro regimes de queda apontam para o sinal
+funcionar melhor lá, com magnitude que seria interessante (+7% ao ano) —
+e é consistente com o argumento da dispersão. Mas a amostra tem 11 a 31 períodos
+dentro de cada regime e o mínimo detectável é 3 a 6 vezes maior do que o efeito.
+
+Não é "shown absent" como as rondas 9 e 10. É "not proven", como a ronda 6 — e a
+diferença entre as duas continua a ser a coisa mais importante que este
+aparelho de medição sabe fazer.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1360,6 +1448,7 @@ a inspecção mais fina que o explicou.**
 | 11 | CLV com IC de −0,041 ao minuto, oito vezes qualquer coisa anterior | 88% era salto bid-ask: entra-se uma barra depois e sobra −0,005. O que resta replica nos três prazos mas os custos são 5 a 13× o ganho |
 | 12 | Carteira de peso igual a −4,2% enquanto o índice fazia +35,9% | Subtracção esquecida: o painel prevê retorno em excesso. Somando o índice de volta dá +31,3% — e o erro fazia os nossos algoritmos parecerem melhores |
 | 13 | Correlação −0,02 com o índice: o perfil perfeito para diversificar | A fasquia com essa correlação é −0,23% ao ano e o sinal fez −0,69%. Fica abaixo de dinheiro parado em todos os pesos |
+| 14 | Em regimes de queda, o sinal rende +7% a +8% anualizados em 3 dos 4 regimes | O mínimo detectável é 3 a 6× maior do que o efeito: amostra cega, não nulo medido. Faltam 13 a 42 anos |
 
 ## O que ficou estabelecido
 
@@ -1388,6 +1477,15 @@ a inspecção mais fina que o explicou.**
    e 5 minutos, onde há três e oito vezes mais dias. E ao minuto o spread de
    ida-e-volta come 65% do movimento típico, o que decidiria o prazo de qualquer
    maneira.
+
+**Não decidido, por falta de amostra e não por ausência de efeito:**
+
+- **O sinal em regimes de queda** (ronda 14). Três dos quatro regimes ex-ante de
+  mercado a cair mostram o sinal a render +7% a +8% anualizados lá dentro contra
+  ligeiramente negativo fora, o que é consistente com o argumento da dispersão.
+  Mas há 11 a 31 períodos dentro de cada regime e o mínimo detectável é 3 a 6
+  vezes maior do que o efeito medido. Seriam precisos 13 a 42 anos. É a segunda
+  vez (com a ronda 6) que a resposta honesta é "não sei" em vez de "não existe".
 
 **Positivo, e real:**
 
