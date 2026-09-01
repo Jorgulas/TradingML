@@ -1161,6 +1161,102 @@ se resolvem comprando dados melhores.
 
 ---
 
+# Ronda 12 — tudo contra comprar e ficar quieto
+
+Pergunta do Jorge: *"dado os algoritmos todos que implementámos, qual seria o
+mais seguro e com maior retorno? Não estou a falar só do trading real time mas
+investimentos a curto e longo prazo."*
+
+Onze rondas mediram sinais uns contra os outros, contra o acaso, contra o
+HAR-RV, contra votações simples. **Nunca contra a alternativa que qualquer
+pessoa tem sem escrever uma linha de código.** Era a referência que decidia se
+alguma coisa aqui valeu a pena, e faltava.
+
+## O longo prazo, com o histórico todo
+
+SPY desde 1993, 34 anos:
+
+| Métrica | Valor |
+|---|---|
+| Retorno total | **+3.059%** |
+| Anualizado | **10,84%** |
+| Volatilidade | 18,54% |
+| Sharpe | 0,58 |
+| **Drawdown máximo** | **−55,2%** |
+| Pior dia | −10,9% |
+
+Os cinco piores anos: 2008 **−36,8%**, 2002 −21,6%, 2022 −18,2%, 2001 −11,8%,
+2000 −9,7%.
+
+É a metade da resposta que costuma ficar de fora. "Seguro" não quer dizer que
+não dói — quer dizer que a probabilidade de recuperar é alta se houver prazo
+para esperar. Custa perder metade do capital uma vez por década.
+
+## O confronto directo
+
+Mesmas datas, mesmos custos, mesma aritmética. A estratégia é simulada **a
+sério** desta vez — rebalanceamento de 5 em 5 dias sem sobreposição, modelo
+re-treinado por trimestre só com o passado, spread cobrado sobre a rotação
+efectiva, e composto. O que sai é uma curva de capital, não uma média de janelas
+sobrepostas que não se pode compor.
+
+Período 2025-04 a 2026-08, 214 acções (universo corrigido da ronda 8), ~70
+períodos de rebalanceamento:
+
+| Estratégia | Total | Anual | Vol | Sharpe | Drawdown |
+|---|---|---|---|---|---|
+| **Comprar o índice (SPY)** | **+35,9%** | **23,98%** | 16,47% | **1,46** | −6,5% |
+| Comprar as 214 acções, peso igual | +31,3% | 21,02% | 16,24% | 1,29 | −5,2% |
+| Sinal transversal long-short (líquido) | **−1,3%** | −0,88% | 7,72% | −0,11 | −6,5% |
+
+O melhor sinal que este projecto encontrou, simulado com custos no universo
+corrigido, **perdeu 1,3% enquanto o índice fazia 35,9%**.
+
+## O erro que corrigi a meio, e que teria dado a resposta errada
+
+A primeira versão punha a carteira de peso igual a **−4,2%** enquanto o índice
+fazia +35,9%. Parecia uma descoberta — o universo a ser esmagado pelo índice.
+Era uma subtracção esquecida: o `forward_return` do painel é o retorno em
+**excesso** sobre o índice, porque é isso que os modelos prevêem. Somando o
+índice de volta, a carteira de peso igual dá +31,3%.
+
+O erro está no sentido perigoso: fazia os nossos algoritmos parecerem melhores
+por comparação com um universo artificialmente afundado.
+
+## A resposta
+
+**Nenhum. Comprar o índice bate tudo o que construímos.**
+
+E o intervalo de confiança nem sequer distingue as três linhas — com 70
+períodos, o IC do próprio SPY é [−0,11%, +0,98%]. O que se pode afirmar é mais
+fraco do que a tabela sugere: nenhuma diferença é estatisticamente
+demonstrável, e o ponto estimado do nosso sinal é negativo.
+
+**Três ressalvas honestas, todas a favor dos algoritmos, e nenhuma suficiente:**
+
+1. O período são 1,4 anos de mercado em alta forte (SPY a 24% anualizado contra
+   10,8% de média histórica). Favorece comprar e esperar de forma atípica.
+2. O long-short é **neutro ao mercado** por construção — metade comprado, metade
+   vendido. Tem metade da volatilidade e um perfil de risco diferente. Comparar
+   Sharpe entre os dois é comparar coisas distintas.
+3. O sinal existe: as rondas 8 e 11 mediram-no positivo fora da amostra. Só é
+   pequeno de mais para pagar a execução.
+
+Mesmo concedendo as três: o IC medido é ~0,006 e os custos comem 5 a 13 vezes
+isso. Não é uma questão de afinação.
+
+## O que isto fecha
+
+O projecto começou a perguntar se se consegue prever o mercado com machine
+learning. A resposta, medida ao longo de doze rondas com protocolo que apanhou
+oito conclusões erradas minhas: **não com estes dados**, e a alternativa gratuita
+— comprar o índice e não lhe tocar — venceu por uma margem que nenhuma das
+ressalvas cobre.
+
+O valor do que construímos não é a carteira. É o aparelho de medição.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1177,10 +1273,18 @@ a inspecção mais fina que o explicou.**
 | 9 | Joelho da média móvel a dominar 19 das 30 melhores configurações do treino | Spearman −0,0005 contra a direcção futura: zero medido com 790 mil observações, e nada sobreviveu ao teste |
 | 10 | Ao minuto, 17 de 27 células com intervalo fora do zero e uma fronteira nítida em troço = média | Não replica: a 2m e 5m, com 3x e 8x mais dias, a mesma região dá 9/24 e 12/24 positivas — moedas ao ar |
 | 11 | CLV com IC de −0,041 ao minuto, oito vezes qualquer coisa anterior | 88% era salto bid-ask: entra-se uma barra depois e sobra −0,005. O que resta replica nos três prazos mas os custos são 5 a 13× o ganho |
+| 12 | Carteira de peso igual a −4,2% enquanto o índice fazia +35,9% | Subtracção esquecida: o painel prevê retorno em excesso. Somando o índice de volta dá +31,3% — e o erro fazia os nossos algoritmos parecerem melhores |
 
 ## O que ficou estabelecido
 
 **Negativo, com solidez:**
+
+0. **Comprar o índice bate tudo o que construímos** (ronda 12). No período em
+   que há dados para todos os algoritmos, o SPY fez +35,9% e o melhor sinal do
+   projecto, simulado com custos no universo corrigido, fez −1,3%. Nenhuma
+   diferença é estatisticamente demonstrável com 70 períodos, mas o ponto
+   estimado é inequívoco e nenhuma das ressalvas a favor dos algoritmos cobre a
+   margem.
 
 1. **A direcção não é previsível.** Seis modelos entre 49,1% e 53,5%; 13
    regimes testados com correcção de Bonferroni, nenhum sobrevive.

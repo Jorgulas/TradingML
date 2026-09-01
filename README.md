@@ -958,6 +958,38 @@ mas o custo de execução é **5 a 13× maior**. Para pagar, o IC teria de ser
 0,03–0,08 — a ordem de grandeza que a literatura reporta para fluxo de ordens a
 sério, com lado agressor e profundidade do livro.
 
+## A referência que faltava: comprar e ficar quieto
+
+```bash
+py src/research/benchmark_comparison.py
+```
+
+Onze rondas mediram sinais contra o acaso, contra o HAR-RV, contra votações
+simples — nunca contra a alternativa que qualquer pessoa tem sem escrever código.
+
+**Longo prazo (SPY, 34 anos):** +10,84% anualizado, volatilidade 18,5%, Sharpe
+0,58, **drawdown máximo −55,2%**. Piores anos: 2008 −36,8%, 2002 −21,6%, 2022
+−18,2%. É a metade da resposta que costuma ficar de fora — "seguro" não quer
+dizer que não dói.
+
+**Confronto directo** (2025-04 a 2026-08, 214 acções, rebalanceamento de 5 dias
+sem sobreposição, custos cobrados, composto):
+
+| Estratégia | Total | Anual | Sharpe | Drawdown |
+|---|---|---|---|---|
+| **Comprar o índice (SPY)** | **+35,9%** | 23,98% | **1,46** | −6,5% |
+| Comprar as 214 acções, peso igual | +31,3% | 21,02% | 1,29 | −5,2% |
+| Sinal transversal long-short (líquido) | −1,3% | −0,88% | −0,11 | −6,5% |
+
+**Nenhum algoritmo deste projecto bate comprar o índice.** Com 70 períodos
+nenhuma diferença é estatisticamente demonstrável — o IC do próprio SPY é
+[−0,11%, +0,98%] — mas o ponto estimado é inequívoco.
+
+Ressalvas, todas a favor dos algoritmos e nenhuma suficiente: o período é curto
+e de alta forte; o long-short é neutro ao mercado e tem metade da volatilidade;
+e o sinal existe, só é pequeno de mais para pagar a execução (IC ~0,006 contra
+custos de 5 a 13× isso).
+
 ## Testes
 
 ```bash
@@ -1008,6 +1040,8 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
                         grelha completa e replica entre 1m/2m/5m
   order_flow_proxy.py   fluxo assinado aproximado (CLV x volume normalizado),
                         teste ao salto bid-ask e liquido de custos
+  benchmark_comparison.py  tudo contra comprar o indice: 34 anos de SPY e o
+                        confronto directo com custos e composicao
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia
