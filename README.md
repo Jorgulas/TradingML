@@ -990,6 +990,35 @@ e de alta forte; o long-short é neutro ao mercado e tem metade da volatilidade;
 e o sinal existe, só é pequeno de mais para pagar a execução (IC ~0,006 contra
 custos de 5 a 13× isso).
 
+### Combinar o sinal com o índice
+
+```bash
+py src/research/blend_with_index.py
+```
+
+Pergunta diferente da anterior: um activo pode melhorar uma carteira **mesmo
+rendendo menos do que ela**, se se mover de forma independente. A condição é
+aritmética — juntar S a I melhora o Sharpe se e só se
+`Sharpe(S) > correlação × Sharpe(I)`.
+
+**Correlação medida: −0,0207** (p = 0,863). Sendo ligeiramente negativa, a
+fasquia desce para **−0,23% ao ano** — o sinal podia perder até isso e ainda
+ajudar. Fez **−0,69%**.
+
+| No sinal | Anual | Vol | Sharpe | Drawdown | Sharpe c/ dinheiro |
+|---|---|---|---|---|---|
+| 0% | 23,98% | 16,47% | 1,46 | −6,5% | 1,46 |
+| 10% | 21,45% | 14,83% | 1,45 | −5,9% | 1,45 |
+| 30% | 16,43% | 11,72% | 1,40 | −4,9% | 1,44 |
+| 50% | 11,45% | 9,03% | 1,27 | −4,5% | **1,43** |
+
+A fasquia certa não é "melhora o retorno" — é **bater dinheiro parado**, que
+deixa o Sharpe aritmético invariante em todos os pesos e é grátis. O sinal fica
+abaixo dessa linha em todos os pesos, e a distância cresce.
+
+Nos 15 piores períodos do índice (média −2,33%) o sinal rendeu −0,27%. Não é
+hedge: não faz nada de útil quando faria falta.
+
 ## Testes
 
 ```bash
@@ -1042,6 +1071,8 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
                         teste ao salto bid-ask e liquido de custos
   benchmark_comparison.py  tudo contra comprar o indice: 34 anos de SPY e o
                         confronto directo com custos e composicao
+  blend_with_index.py   o sinal como diversificador: condicao de Sharpe, ponto
+                        de equilibrio e comportamento nas quedas do indice
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia

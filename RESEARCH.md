@@ -1257,6 +1257,91 @@ O valor do que construímos não é a carteira. É o aparelho de medição.
 
 ---
 
+# Ronda 13 — o sinal vale como diversificador?
+
+Pergunta do Jorge, e é diferente da da ronda 12: *"testa se combinar o sinal com
+comprar o índice melhora alguma coisa"*.
+
+Lá mediu-se o sinal **sozinho** contra o índice sozinho, e ele perdeu. Mas um
+activo pode melhorar uma carteira **mesmo rendendo menos do que ela**, desde que
+se mova de forma independente: a volatilidade da mistura cai mais depressa do
+que o retorno, e o rácio melhora. É o único almoço grátis que existe em finanças,
+e o livro long-short tem exactamente o perfil de quem podia servi-lo — neutro ao
+mercado por construção, com 7,8% de volatilidade contra 16,5% do índice.
+
+## A condição, que é aritmética e não opinião
+
+Juntar um activo S a uma carteira I melhora o Sharpe **se e só se**
+
+    Sharpe(S) > correlação(S, I) × Sharpe(I)
+
+Com correlação zero, reduz-se a "o retorno de S tem de ser positivo". Com
+correlação **negativa**, a fasquia desce abaixo de zero e até um activo que perde
+um pouco ainda ajuda. É por isso que a correlação decide, e não o retorno isolado.
+
+## O que se mediu
+
+**Correlação entre o sinal e o índice: −0,0207** (p = 0,863). Praticamente zero,
+como se esperava de um livro neutro — e indistinguível de zero.
+
+Com essa correlação ligeiramente negativa, a fasquia fica em **−0,23% ao ano**:
+o sinal podia perder até isso e ainda assim melhorar a carteira. Perdeu **−0,69%**.
+
+| | Valor |
+|---|---|
+| Mínimo para a mistura melhorar | **−0,23%** ao ano |
+| Retorno que o sinal teve | **−0,69%** ao ano |
+| Falta | −0,45pp |
+
+## As misturas, contra a alternativa gratuita
+
+A fasquia certa para um diversificador não é "melhora o retorno" — é **bater
+dinheiro parado**. Misturar com dinheiro deixa o Sharpe aritmético *exactamente*
+invariante em todos os pesos (a carteira desliza numa recta que passa pela
+origem), e é grátis.
+
+| No sinal | Anual | Vol | Sharpe | Drawdown | Sharpe c/ dinheiro | Diferença |
+|---|---|---|---|---|---|---|
+| 0% | 23,98% | 16,47% | 1,46 | −6,5% | 1,46 | — |
+| 5% | 22,71% | 15,64% | 1,45 | −6,2% | 1,45 | −0,001 |
+| 10% | 21,45% | 14,83% | 1,45 | −5,9% | 1,45 | −0,004 |
+| 20% | 18,93% | 13,24% | 1,43 | −5,4% | 1,44 | −0,014 |
+| 30% | 16,43% | 11,72% | 1,40 | −4,9% | 1,44 | −0,036 |
+| 50% | 11,45% | 9,03% | 1,27 | −4,5% | 1,43 | **−0,158** |
+
+**Fica abaixo da linha do dinheiro em todos os pesos, e a distância cresce.** A
+mistura *reduz* mesmo o risco — volatilidade de 16,5% para 9,0%, drawdown de
+−6,5% para −4,5% — mas reduz o retorno mais do que proporcionalmente. Guardar a
+mesma fatia em dinheiro dá a mesma redução de risco, de graça, sem risco de
+execução, sem custos de empréstimo de títulos e sem complexidade.
+
+## E quando o índice cai?
+
+O teste que separa um diversificador a sério de um que só parece. Uma correlação
+média perto de zero pode esconder um activo que acompanha o índice exactamente
+quando ele afunda.
+
+Nos 15 piores períodos do índice (média **−2,33%**), o sinal rendeu **−0,27%**,
+com 53% deles positivos. Nos melhores períodos rendeu +0,06%.
+
+Não é hedge. Não faz nada de útil quando faria falta.
+
+## A resposta
+
+**Não melhora nada.** Nem em retorno, nem em rácio, nem como protecção nas
+quedas. Fica abaixo de dinheiro parado em todos os pesos testados.
+
+E a ressalva de sempre, que aqui é a favor do sinal: com 72 períodos, nenhuma das
+diferenças de Sharpe é estatisticamente demonstrável — todos os intervalos
+atravessam o zero. Mas a **condição de Sharpe** não depende da amostra curta da
+mesma maneira: correlação e volatilidade estimam-se com muito mais precisão do
+que uma média, e é a média do sinal que está abaixo da fasquia.
+
+A conclusão da ronda 12 mantém-se e ganha uma segunda perna: o sinal não bate o
+índice sozinho, **e também não o complementa**.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1274,6 +1359,7 @@ a inspecção mais fina que o explicou.**
 | 10 | Ao minuto, 17 de 27 células com intervalo fora do zero e uma fronteira nítida em troço = média | Não replica: a 2m e 5m, com 3x e 8x mais dias, a mesma região dá 9/24 e 12/24 positivas — moedas ao ar |
 | 11 | CLV com IC de −0,041 ao minuto, oito vezes qualquer coisa anterior | 88% era salto bid-ask: entra-se uma barra depois e sobra −0,005. O que resta replica nos três prazos mas os custos são 5 a 13× o ganho |
 | 12 | Carteira de peso igual a −4,2% enquanto o índice fazia +35,9% | Subtracção esquecida: o painel prevê retorno em excesso. Somando o índice de volta dá +31,3% — e o erro fazia os nossos algoritmos parecerem melhores |
+| 13 | Correlação −0,02 com o índice: o perfil perfeito para diversificar | A fasquia com essa correlação é −0,23% ao ano e o sinal fez −0,69%. Fica abaixo de dinheiro parado em todos os pesos |
 
 ## O que ficou estabelecido
 
@@ -1284,7 +1370,10 @@ a inspecção mais fina que o explicou.**
    projecto, simulado com custos no universo corrigido, fez −1,3%. Nenhuma
    diferença é estatisticamente demonstrável com 70 períodos, mas o ponto
    estimado é inequívoco e nenhuma das ressalvas a favor dos algoritmos cobre a
-   margem.
+   margem. **E também não serve de diversificador** (ronda 13): a correlação com
+   o índice é −0,02, o que baixaria a fasquia para −0,23% ao ano, mas o sinal fez
+   −0,69% e fica abaixo de dinheiro parado em todos os pesos. Nos 15 piores
+   períodos do índice rendeu −0,27%, portanto também não é protecção.
 
 1. **A direcção não é previsível.** Seis modelos entre 49,1% e 53,5%; 13
    regimes testados com correcção de Bonferroni, nenhum sobrevive.
