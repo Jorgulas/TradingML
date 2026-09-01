@@ -1053,6 +1053,53 @@ Defesas contra fatiar até encontrar: regimes clássicos definidos à partida,
 Bonferroni, e um **placebo por deslocamento circular** que preserva a estrutura
 de blocos dos regimes em vez de assumir independência entre períodos.
 
+## Histórico profundo e a forma da cauda
+
+```bash
+py src/research/deep_history.py   # 2 milhoes de barras, 1962-2026
+py src/research/tail_shape.py     # a forma da cauda e' caracter da empresa?
+```
+
+A ronda 14 acabou em "seriam precisos 13 a 42 anos" e o painel tinha três. Em
+barras diárias o yfinance dá desde **1962**: 2.022.301 barras, 222 acções, 65
+anos — 20 a 60× mais dados.
+
+### A pergunta
+
+Volatilidade é um *nível*. A **forma** com que é entregue é outra coisa: duas
+acções com a mesma volatilidade anual podem entregá-la em muitos movimentos
+médios ou em poucos enormes. Três medidas sem escala: `q99(|r|)/q75(|r|)`, a
+quota de variância do 1% de dias piores, e o estimador de Hill.
+
+### O resultado
+
+| Medida | Persistência bruta | Residual (sem liquidez, preço, dimensão, vol) | Transições positivas |
+|---|---|---|---|
+| volatilidade (referência) | +0,804 | +0,569 | 100% |
+| tail_ratio | +0,182 | +0,161 | 85% |
+| **concentração** | **+0,221** | **+0,255** | **98%** |
+
+E a volatilidade passada prevê a forma futura a apenas **+0,02–0,03**, contra
+**+0,18–0,22** da forma passada. É uma dimensão separada.
+
+Persiste **20 anos** (+0,075), replica em **5/5** transições de década, e o
+placebo por troca de identidade dá **p = 0,005**.
+
+### Mas não é novo
+
+Antes de publicar, fui à literatura: **já é conhecido**. Kelly & Jiang (NBER
+w19375) reportam AR(1) mensal de 0,927 na série de cauda; a ortogonalidade à
+volatilidade também é estabelecida. Redescoberta com método mais duro e amostra
+mais longa — o que tem valor, mas não é descoberta.
+
+### A peça menos certa
+
+Nas mesmas 115 acções presentes em todas as décadas, a concentração de risco
+subiu de 0,1974 (1980s) para 0,2302 (2020s) enquanto a volatilidade ficou parada
+(32,0% → 32,5%). Tendência +0,00088/ano, p = 0,0003; sem 2020 fica p = 0,0008,
+portanto **não é COVID**. A mesma volatilidade está a ser entregue em menos dias
+e maiores. Não sei se é novo.
+
 ## Testes
 
 ```bash
@@ -1109,6 +1156,9 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
                         de equilibrio e comportamento nas quedas do indice
   regime_conditional.py  o sinal em regimes de queda: ex-ante contra
                         contemporaneo, placebo circular e poder estatistico
+  deep_history.py       2 milhoes de barras diarias, 1962-2026, ajustadas
+  tail_shape.py         a forma da cauda como caracter da empresa: medidas sem
+                        escala, residualizacao, decadencia e placebo
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia

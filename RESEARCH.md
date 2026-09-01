@@ -1430,6 +1430,147 @@ aparelho de medição sabe fazer.
 
 ---
 
+# Ronda 15 — 65 anos de dados, e uma redescoberta honesta
+
+Pedido do Jorge: não pôr limite nos dados, julgar eu o que é extraível, olhar
+para os outliers para concluir sobre o centro, e afastar da Big Picture para a
+Small Picture. Com intenção de publicar se sair conhecimento novo.
+
+## Primeiro: a alavanca que nunca tinha puxado
+
+A ronda 14 acabou em *"seriam precisos 13 a 42 anos de histórico"* e eu tinha
+três. Nunca estendi os dados diários porque o painel nasceu de barras de 1 hora,
+e o yfinance só dá 730 dias dessas. **Em barras diárias dá desde 1962.**
+
+| | Antes | Agora |
+|---|---|---|
+| Barras | 112 mil | **2.022.301** |
+| Acções | 158 | 222 |
+| Período | 2023–2026 (3 anos) | **1962–2026 (65 anos)** |
+
+Cobertura por década: 19 acções nos anos 60, 52 nos 70, 116 nos 80, 153 nos 90,
+179 nos 2000, 213 nos 2010, 222 nos 2020. Cinco transições de década utilizáveis.
+
+`auto_adjust=True` não é detalhe: a 65 anos há dezenas de desdobramentos por
+acção, e sem ajustamento cada um aparece como uma queda de 50% num dia. A ronda
+11 perdeu uma experiência inteira por causa de **um** ticker mal ajustado.
+
+## A pergunta que escolhi
+
+Catorze rondas estabeleceram que a direcção não é previsível e que a magnitude
+é. Toda a gente mede magnitude como **volatilidade**. Mas volatilidade é um
+*nível*, e há uma dimensão separada: a **forma** com que é entregue.
+
+Duas acções com volatilidade anual idêntica podem comportar-se de maneiras
+completamente diferentes — uma entrega-a em muitos movimentos médios, a outra em
+poucos enormes. Para quem gere risco não é o mesmo. A pergunta: **é carácter da
+empresa ou é ruído?**
+
+Três medidas, todas sem escala por construção: `q99(|r|)/q75(|r|)`, a quota da
+variância entregue pelo 1% de dias piores, e o estimador de Hill.
+
+## O que saiu
+
+**1. Não são volatilidade, liquidez nem dimensão disfarçadas.** Correlações
+transversais médias: com dias parados +0,12/+0,10/−0,05; com preço
+−0,03/−0,02/+0,02; com volume-dólar −0,15/−0,15/+0,07; com volatilidade
++0,16/+0,17/−0,14. Nenhuma passa de 0,17.
+
+**2. Persistem, e sobrevivem a retirar tudo isso:**
+
+| Medida | Bruta | Residual | Retido | Transições positivas |
+|---|---|---|---|---|
+| volatilidade (referência) | +0,804 | +0,569 | 71% | 100% |
+| tail_ratio | +0,182 | +0,161 | 88% | 85% |
+| **concentração** | **+0,221** | **+0,255** | **116%** | **98%** |
+| hill | +0,148 | +0,135 | 91% | 83% |
+
+A concentração *sobe* ao residualizar: os controlos estavam a acrescentar ruído,
+não sinal.
+
+**3. E a volatilidade não sabe nada sobre a forma:**
+
+| | Prevê a forma futura |
+|---|---|
+| Volatilidade passada | +0,02 a +0,03 |
+| **Forma passada** | **+0,18 a +0,22** |
+
+**4. Dura muito.** Persistência a 1 ano +0,221; a 5 anos +0,107; a **20 anos
++0,075** (concentração). Um terço do valor duas décadas depois.
+
+**5. Replica fora da amostra.** Ordenando numa década e medindo na seguinte:
+concentração 5/5 transições no sentido certo, tail_ratio 4/5.
+
+**6. Placebo por troca de identidade: p = 0,005** — o mínimo possível com 200
+permutações. Nenhuma igualou o valor observado.
+
+## E agora a parte que interessa: isto não é novo
+
+Antes de escrever "conhecimento novo", fui à literatura. **Já é conhecido.**
+
+- Kelly & Jiang (NBER w19375) reportam a série de cauda como altamente
+  persistente, com AR(1) mensal de 0,927.
+- Trabalhos sobre exposição a risco de cauda medem persistência de 0,78 a um mês
+  de distância, ainda positiva a cinco anos.
+- A ortogonalidade à volatilidade também é estabelecida: o estimador de Kelly &
+  Jiang é construído para que mudanças de volatilidade não afectem o expoente, e
+  sabe-se que resíduos filtrados por GARCH continuam a ter caudas gordas.
+- Há literatura própria sobre risco de cauda idiossincrático na secção
+  transversal, com controlos para exactamente as variáveis que usei.
+
+Redescobri um resultado estabelecido. O que a nossa versão tem de próprio é
+método — 65 anos, cinco transições de década, residualização de controlos
+mecânicos, e um placebo por troca de identidade — mas o **fenómeno** é conhecido.
+Replicação tem valor e é subvalorizada. Não é descoberta.
+
+## A única peça de que tenho menos certeza
+
+Nas **mesmas 115 acções** presentes em todas as décadas de 1980 a 2020, a
+concentração de risco subiu enquanto a volatilidade ficou parada:
+
+| Década | Concentração | Volatilidade |
+|---|---|---|
+| 1980s | 0,1974 | 32,0% |
+| 1990s | 0,1698 | 31,3% |
+| 2000s | 0,1907 | 34,7% |
+| 2010s | 0,1956 | 23,0% |
+| **2020s** | **0,2302** | 32,5% |
+
+Tendência +0,00088/ano (p = 0,0003). Sem o ano de 2020 fica +0,00083 (p =
+0,0008) — **não é COVID**. E 2024 (0,2577) e 2025 (0,2772) são os valores mais
+altos de toda a série, acima do próprio ano da pandemia.
+
+Lido em português: **a mesma volatilidade está a ser entregue em cada vez menos
+dias, cada vez maiores.** Com controlo de composição, portanto não é por terem
+entrado empresas diferentes.
+
+Não fiz revisão de literatura suficiente para saber se isto é novo. Suspeito que
+não seja, mas é a peça deste trabalho de que tenho menos certeza — em ambos os
+sentidos.
+
+## Um erro que os testes apanharam
+
+`GAUSSIAN_TAIL_RATIO` estava em 2,02, calculado com o percentil 99 **unilateral**
+da normal (2,326). Mas a medida é sobre o valor **absoluto**, e para |X| com
+X~N(0,1) tem-se P(|X| < c) = 2Φ(c) − 1, portanto o percentil 99 é Φ⁻¹(0,995) =
+2,576. A referência certa é **2,24**. Confirmado por simulação com 2 milhões de
+amostras: 2,2417.
+
+Não é cosmético: com a referência errada, uma cauda observada de 2,97 parecia 47%
+acima da normal quando está 33% acima.
+
+## O que fica
+
+Uma regularidade empírica sólida e bem testada, que **já era conhecida**. E um
+dataset 20 a 60 vezes maior, que abre perguntas que antes não tinham poder
+estatístico nenhum.
+
+O pedido era gerar conhecimento novo. Não gerámos. O que gerámos foi capacidade
+de o procurar — e a honestidade de dizer, quando o resultado é bonito, que
+alguém já lá tinha chegado.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1449,6 +1590,7 @@ a inspecção mais fina que o explicou.**
 | 12 | Carteira de peso igual a −4,2% enquanto o índice fazia +35,9% | Subtracção esquecida: o painel prevê retorno em excesso. Somando o índice de volta dá +31,3% — e o erro fazia os nossos algoritmos parecerem melhores |
 | 13 | Correlação −0,02 com o índice: o perfil perfeito para diversificar | A fasquia com essa correlação é −0,23% ao ano e o sinal fez −0,69%. Fica abaixo de dinheiro parado em todos os pesos |
 | 14 | Em regimes de queda, o sinal rende +7% a +8% anualizados em 3 dos 4 regimes | O mínimo detectável é 3 a 6× maior do que o efeito: amostra cega, não nulo medido. Faltam 13 a 42 anos |
+| 15 | Forma da cauda persiste 20 anos, ortogonal à volatilidade, placebo p=0,005 | Verdadeiro e bem testado — e já publicado. Kelly & Jiang têm AR(1) 0,927 na série de cauda; a ortogonalidade também é conhecida |
 
 ## O que ficou estabelecido
 
@@ -1486,6 +1628,17 @@ a inspecção mais fina que o explicou.**
   Mas há 11 a 31 períodos dentro de cada regime e o mínimo detectável é 3 a 6
   vezes maior do que o efeito medido. Seriam precisos 13 a 42 anos. É a segunda
   vez (com a ronda 6) que a resposta honesta é "não sei" em vez de "não existe".
+
+**Confirmado, mas já conhecido:**
+
+- **A forma da cauda é uma característica persistente da empresa** (ronda 15),
+  ortogonal à volatilidade: a volatilidade passada prevê a forma futura a
+  +0,02–0,03 enquanto a forma passada prevê a +0,18–0,22. Persiste 20 anos,
+  replica em 5 de 5 transições de década, e o placebo por troca de identidade dá
+  p = 0,005 sobre 65 anos e 2,02 milhões de barras. **Mas é literatura
+  estabelecida** (Kelly & Jiang, NBER w19375, e a literatura de risco de cauda
+  idiossincrático). O que a nossa versão acrescenta é método e amostra, não o
+  fenómeno.
 
 **Positivo, e real:**
 
