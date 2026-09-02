@@ -1100,6 +1100,28 @@ subiu de 0,1974 (1980s) para 0,2302 (2020s) enquanto a volatilidade ficou parada
 portanto **não é COVID**. A mesma volatilidade está a ser entregue em menos dias
 e maiores. Não sei se é novo.
 
+### E o mecanismo? As notícias agendadas não explicam
+
+```bash
+py src/research/scheduled_news_share.py
+```
+
+Baker et al. (NBER w28687) explicam a versão de **mercado** deste facto: os
+saltos do índice passaram de notícias não agendadas (guerras) para agendadas
+(política monetária). Ao nível da **empresa**, a notícia agendada dominante são
+os **resultados trimestrais** — o que dá uma previsão testável.
+
+**Não se confirma.** A intensidade dos dias de resultados (variância que lá cai,
+a dividir pela fracção de dias que são de resultados) está **plana**: 3,55× em
+2005, 3,45× em 2025, tendência p = 0,24. E retirando esses dias, a tendência
+sobrevive: declive cai de +0,00230 para +0,00153, mas a **diferença** entre os
+dois é +0,00077/ano com IC95% [−0,00076, +0,00247] — inclui zero.
+
+**Um erro estatístico que o código chegou a cometer** e que está corrigido e
+testado: concluir que os resultados explicavam a subida porque uma série era
+significativa e a outra não. *A diferença entre significativo e não significativo
+não é ela própria significativa.* O teste certo é sobre a diferença de declives.
+
 ## Testes
 
 ```bash
@@ -1159,6 +1181,8 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
   deep_history.py       2 milhoes de barras diarias, 1962-2026, ajustadas
   tail_shape.py         a forma da cauda como caracter da empresa: medidas sem
                         escala, residualizacao, decadencia e placebo
+  scheduled_news_share.py  a subida da concentracao vem dos resultados
+                        trimestrais? teste da diferenca de declives
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia

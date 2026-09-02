@@ -1571,6 +1571,85 @@ alguém já lá tinha chegado.
 
 ---
 
+# Ronda 16 — o mecanismo das notícias agendadas não explica a subida
+
+A ronda 15 deixou uma coisa por explicar: nas mesmas 115 acções, a concentração
+de risco subiu de 0,197 (anos 80) para 0,230 (anos 2020) com a volatilidade
+parada. Disse que era a peça de que tinha menos certeza. Fui procurar o
+mecanismo.
+
+## A literatura tem a versão de mercado, com mecanismo
+
+**Baker et al. (NBER w28687), "What Triggers Stock Market Jumps?"**, sobre 90
+anos: os saltos do índice passaram de ser causados por notícias **não agendadas**
+(guerras, nas décadas antigas) para notícias **agendadas**, sobretudo política
+monetária, nas recentes. E há trabalho a documentar que retornos concentrados em
+janelas curtas explicam ~80% do retorno total realizado entre 1994 e 2011.
+
+Mas isso é o **índice**. O meu número é por **empresa**, e ao nível da empresa a
+notícia agendada dominante não é a Reserva Federal — são os **resultados
+trimestrais**. Isso dá uma previsão testável.
+
+## A previsão, e o que saiu
+
+Se a subida ao nível da firma for feita de notícias agendadas, então (a) os dias
+de resultados devem ter ganho peso relativo, e (b) retirando-os, a tendência
+deve desaparecer.
+
+**(a) Não ganharam peso.** A intensidade — variância que cai em dias de
+resultados dividida pela fracção de dias que são de resultados, valendo 1 se
+fosse um dia normal:
+
+| 2005 | 2025 | Tendência |
+|---|---|---|
+| **3,55×** | **3,45×** | +0,036/ano, **p = 0,24** |
+
+Um dia de resultados carrega 3,5 vezes a variância de um dia normal — e carregava
+o mesmo há vinte anos. Plana.
+
+**(b) A tendência não desaparece.** Sobre 134 acções presentes em todos os anos,
+2005–2025:
+
+| Série | Início | Fim | Declive/ano | p |
+|---|---|---|---|---|
+| Concentração (tudo) | 0,2063 | 0,2713 | +0,00230 | 0,034 |
+| **Sem dias de resultados** | 0,1637 | 0,2506 | **+0,00153** | 0,171 |
+| Volatilidade (controlo) | 0,0147 | 0,0190 | −0,00010 | 0,668 |
+
+Os resultados explicam 34% do declive. **Diferença de declives +0,00077/ano,
+IC95% [−0,00076, +0,00247]** — inclui zero. As duas séries não se distinguem.
+
+**O mecanismo de notícias agendadas não explica esta subida.**
+
+## Um erro estatístico que cometi e corrigi
+
+A primeira versão do código concluía automaticamente: *"a série completa é
+significativa (p = 0,034), a série sem resultados não é (p = 0,171), logo os
+resultados explicam a subida"*.
+
+Isso está errado, e é uma falácia clássica: **a diferença entre "significativo" e
+"não significativo" não é ela própria significativa.** Um declive pode cair 34% e
+perder significância apenas por o intervalo ser largo, sem que a diferença entre
+os dois seja distinguível de zero — que é exactamente o que acontece aqui.
+
+O teste certo é sobre a **diferença**, com reamostragem emparelhada dos anos. Com
+ele, a conclusão inverte-se. Há um teste no ficheiro que constrói de propósito o
+caso em que a falácia estaria disponível e verifica que o código já não cai nela.
+
+## O que fica em aberto
+
+Alguma coisa está a concentrar o risco ao nível da empresa, e não são os
+resultados trimestrais. Candidatos que não testei: crescimento dos fundos de
+índice (as acções movem-se mais juntas entre eventos), efeitos de cobertura de
+opções a suprimir volatilidade entre eventos, ou negociação electrónica a
+absorver informação mais depressa e em menos sessões.
+
+Ressalva de poder: 21 observações anuais, e a tendência da série completa é
+p = 0,034 — evidência fraca em todo o lado. Isto aponta uma direcção, não fecha
+uma questão.
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1591,6 +1670,7 @@ a inspecção mais fina que o explicou.**
 | 13 | Correlação −0,02 com o índice: o perfil perfeito para diversificar | A fasquia com essa correlação é −0,23% ao ano e o sinal fez −0,69%. Fica abaixo de dinheiro parado em todos os pesos |
 | 14 | Em regimes de queda, o sinal rende +7% a +8% anualizados em 3 dos 4 regimes | O mínimo detectável é 3 a 6× maior do que o efeito: amostra cega, não nulo medido. Faltam 13 a 42 anos |
 | 15 | Forma da cauda persiste 20 anos, ortogonal à volatilidade, placebo p=0,005 | Verdadeiro e bem testado — e já publicado. Kelly & Jiang têm AR(1) 0,927 na série de cauda; a ortogonalidade também é conhecida |
+| 16 | Sem dias de resultados a tendência perde significância, logo os resultados explicam-na | Falácia: a diferença entre significativo e não significativo não é significativa. Testada a diferença de declives, IC95% inclui zero |
 
 ## O que ficou estabelecido
 
@@ -1628,6 +1708,17 @@ a inspecção mais fina que o explicou.**
   Mas há 11 a 31 períodos dentro de cada regime e o mínimo detectável é 3 a 6
   vezes maior do que o efeito medido. Seriam precisos 13 a 42 anos. É a segunda
   vez (com a ronda 6) que a resposta honesta é "não sei" em vez de "não existe".
+
+**Em aberto, com uma pista negativa:**
+
+- **A concentração de risco ao nível da empresa subiu** (rondas 15 e 16): nas
+  mesmas 115 acções, de 0,197 nos anos 80 para 0,230 nos 2020, com a
+  volatilidade parada. A literatura tem a versão de MERCADO deste facto (Baker
+  et al., NBER w28687) e atribui-a à passagem de notícias não agendadas para
+  agendadas. **Ao nível da empresa esse mecanismo não se confirma**: a
+  intensidade dos dias de resultados está plana desde 2005 (3,55× → 3,45×,
+  p = 0,24) e retirar esses dias não faz a tendência desaparecer. Alguma coisa
+  concentra o risco por empresa, e não são os resultados trimestrais.
 
 **Confirmado, mas já conhecido:**
 
