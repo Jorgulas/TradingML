@@ -1122,6 +1122,50 @@ testado: concluir que os resultados explicavam a subida porque uma série era
 significativa e a outra não. *A diferença entre significativo e não significativo
 não é ela própria significativa.* O teste certo é sobre a diferença de declives.
 
+## O bracket de pivots: 25 pontos de risco para ganhar 5
+
+Hipótese trazida de fora: MNQ/USTEC ao minuto, pivots com 10 barras de cada
+lado como suporte/resistência, stop 25 pontos, alvo 5 pontos, 89-91% de acerto
+contra 83% de ponto morto. Código em `src/research/pivot_bracket.py`.
+
+### O ponto morto É a moeda ao ar
+
+Com stop S e alvo A, o ponto morto é S/(S+A) = 83,33%. E a probabilidade de uma
+caminhada sem deriva tocar +A antes de −S é também S/(S+A) = 83,33%. O mesmo
+número — é a definição de jogo justo. "83% de ponto morto" não é fasquia
+nenhuma: é o que se tem sem estratégia.
+
+Como o alvo é pequeno, cada ponto de custo vale 3,33pp de taxa de acerto. Ao
+spread típico de um CFD (2,5 pontos) o ponto morto sobe a **91,67%** — acima da
+taxa alegada. O mesmo sistema é lucrativo em MNQ e perdedor em USTEC.
+
+### A alegação reproduz-se sem sinal nenhum
+
+27 033 barras de MNQ, 20 sessões. Entradas **aleatórias** no mesmo bracket:
+
+| | acerto |
+|---|---|
+| acaso, deixando a barra de entrada resolver | **89,07%** [87,4 – 90,7] |
+| acaso, honesto (resolve a partir de t+1) | 83,60% (teoria: 83,33%) |
+| pivot *fade* | 82,01% |
+| pivot *rompimento* | 84,32% |
+
+Os 89-91% alegados são o que o acaso produz com um artefacto de preenchimento.
+Com um alvo de 5 pontos e amplitude mediana de 8,5 pontos por barra, **4 em
+cada 5 negócios resolvem-se no primeiro minuto** — o minuto que um backtest
+sobre barras não vê por dentro. Medidos honestamente, os pivots ficam dentro da
+banda do acaso, e muito abaixo do ponto morto realista de 87%.
+
+Líquido: **−1,276 pontos por negócio, IC95% [−2,257, −0,319]** (reamostrando
+sessões). Das 128 células da grelha, **zero** são positivas — e todas as 60
+grelhas de puro ruído tiveram uma melhor célula superior à melhor célula real.
+
+### A alegação contradiz-se
+
+Uma sequência máxima de 5 perdas em 300 negócios tem p = 0,26% a uma taxa de
+90%. Essa sequência é típica de **61%** de acerto — onde a esperança é −7,80
+pontos por negócio.
+
 ## Testes
 
 ```bash

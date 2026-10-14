@@ -1650,6 +1650,170 @@ uma questão.
 
 ---
 
+# Ronda 17 — o bracket de pivots: a taxa de acerto alegada é o que o acaso produz
+
+Código: `src/research/pivot_bracket.py`, testes em `tests/test_pivot_bracket.py`.
+Dados: MNQ=F ao minuto, 27 033 barras, 20 sessões, 17/09/2026 a 14/10/2026 —
+praticamente a mesma janela de "last month's data" da alegação.
+
+**A alegação.** USTEC ou MNQ, barras de 1 minuto. Qualquer pivot com 10 barras
+à esquerda e 10 à direita é um nível de suporte/resistência. Stop a 25 pontos,
+alvo a 5 pontos. Um mês de dados, 300+ negócios, taxa de acerto de 89-91%
+contra um ponto morto de 83%, sequência máxima de 5 perdas.
+
+## Primeiro, o que se decide no papel
+
+**O ponto morto é a taxa de acerto de uma moeda ao ar.** Com stop S e alvo A, o
+ponto morto é S/(S+A) = 25/30 = 83,33%. E numa caminhada sem deriva, a
+probabilidade de tocar +A antes de −S é — pelo teorema da paragem opcional —
+exactamente S/(S+A) = 83,33%. **O mesmo número.** Não é coincidência: é a
+definição de jogo justo. Um bracket assimétrico não cria nem destrói esperança,
+só a redistribui por uma distribuição diferente.
+
+Logo "83% de ponto morto" não é uma fasquia que a estratégia tenha de bater: é
+o que ela já teria **sem estratégia nenhuma**. Tudo o que a alegação afirma é
+que os pivots acrescentam 6 a 8 pontos percentuais a uma moeda ao ar.
+
+**E os custos movem o ponto morto muito, porque o alvo é pequeno.** Com custo
+`c` por ida-e-volta o ponto morto passa a (S+c)/(S+A), e como A são só 5
+pontos, cada ponto de custo vale 3,33pp de taxa de acerto:
+
+| custo ida-e-volta | pontos | ponto morto | margem sobre 90% | esperança |
+|---|---|---|---|---|
+| zero (backtest ingénuo) | 0,00 | 83,33% | +6,67pp | +$4,00 |
+| MNQ só taxas | 0,55 | 85,17% | +4,83pp | +$2,90 |
+| MNQ realista | 1,10 | 87,00% | +3,00pp | +$1,80 |
+| MNQ mau dia | 1,75 | 89,17% | +0,83pp | +$0,50 |
+| **CFD USTEC** | **2,50** | **91,67%** | **−1,67pp** | **−$1,00** |
+
+A última linha é um resultado sozinha: **ao spread típico de um CFD, o ponto
+morto fica acima da taxa de acerto alegada.** A mesma regra pode ser lucrativa
+em MNQ e perdedora em USTEC sem nada mudar na regra. A alegação oferece os dois
+instrumentos como equivalentes e eles não são.
+
+## A alegação contradiz-se a si própria
+
+Com perdas independentes a 10%, a probabilidade de haver **cinco seguidas**
+algures em 300 negócios é 1−exp(−300·0,9·0,1⁵) = **0,26%**. A sequência
+esperada a 90% é 2. Uma sequência máxima de 5 é o que se espera de uma taxa de
+acerto perto dos **61%** — e a 61% a esperança é **−7,80 pontos por negócio**.
+
+Ou a taxa de acerto é muito mais baixa do que a reportada, ou as perdas vêm em
+cachos. A segunda hipótese é a pior: cachos destroem a independência de que
+depende toda a aritmética acima, e 300 negócios num mês passam a valer ~20
+observações e não 300.
+
+Isto não precisou de dados nenhuns — só dos dois números da própria alegação.
+
+## O simulador calibra-se contra a teoria
+
+Antes de medir o sinal, medi se o aparelho estava direito. Entradas **ao acaso**
+no mesmo bracket, nas mesmas sessões:
+
+**83,60%**, contra os 83,33% teóricos. O aparelho está direito.
+
+## E então aparece a explicação inteira
+
+| entrada ao fecho, resolve a partir de t+1 | acerto | bruto |
+|---|---|---|
+| **acaso, mas deixando a barra de entrada resolver** | **89,07%** [87,37 – 90,69] | +1,72 |
+| acaso, honesto | 83,60% [81,84 – 85,40] | +0,08 |
+| pivot *fade* (vende na resistência) | 82,01% | −0,18 |
+| pivot *rompimento* (compra acima) | 84,32% | +0,46 |
+
+**A taxa de acerto alegada de 89-91% é, ponto por ponto, o que entradas
+completamente aleatórias produzem quando se deixa o máximo e o mínimo da barra
+de entrada arrumar o negócio.** O intervalo [87,4%, 90,7%] contém o 89-91%
+alegado quase exactamente. A alegação não precisa de pivots para ser
+reproduzida — precisa de um artefacto de backtest aplicado a sinal nenhum.
+
+O mecanismo: com um alvo de 5 pontos e barras de 1 minuto cuja amplitude
+mediana são 8,5 pontos, **quatro em cada cinco negócios resolvem-se dentro do
+primeiro minuto**. É o minuto que um backtest sobre barras não consegue ver por
+dentro, e é onde vive a taxa de acerto inteira.
+
+E os pivots, medidos honestamente, estão **dentro da banda do acaso** — um
+sentido ligeiramente abaixo, o outro ligeiramente acima, nenhum fora do
+intervalo. Contra o ponto morto realista de 87%, nenhum chega perto.
+
+## As variantes não salvam nada
+
+| variante (honesta, sem a barra de entrada) | n | acerto | líquido |
+|---|---|---|---|
+| fade, atraso 0 | 1212 | 82,01% | −1,28 |
+| rompimento, atraso 0 | 1212 | 84,32% | −0,64 |
+| nível usado 10 barras cedo demais | 1211 | 82,00% | −1,28 |
+| só 09:30–16:00 NY | 310 | 80,32% | −1,76 |
+
+Reamostrando **sessões e não negócios** (negócios do mesmo dia partilham
+regime): **−1,276 pontos por negócio, IC95% [−2,257, −0,319]**, inteiramente
+negativo. 5 sessões positivas em 20.
+
+O placebo exigente — entradas aleatórias **emparelhadas na hora do dia**, que
+mantêm o horário dos pivots e destroem só o alinhamento com eles — dá 83,60%,
+idêntico ao uniforme. Não é um artefacto de horário.
+
+## A grelha inteira, e o varredor de sorte
+
+128 células de (esquerda, direita, stop, alvo, sentido, atraso). **Zero
+positivas em líquido.** A melhor é −0,4261 pontos.
+
+Depois a pergunta que corrige a procura: qual é a melhor célula de uma grelha
+do **mesmo tamanho** construída sobre entradas aleatórias? Mediana **+0,1356**,
+p95 **+0,6180**. **p(ruído ≥ real) = 1,000** — todas as 60 grelhas de puro ruído
+tiveram uma melhor célula superior à melhor célula real.
+
+Não é só que a grelha não encontrou nada. É que encontrou **menos do que o
+acaso costuma encontrar** quando se procura com o mesmo esforço.
+
+## Dois erros meus, um apanhado pelo teste
+
+**O primeiro inverteu a conclusão a meio.** A primeira versão fazia o pivot
+entrar ao preço do *nível* (ordem limitada) e o acaso entrar ao *fecho*, ambos
+a resolver a partir de t+1. Isso é injusto contra a regra: a barra que toca um
+nível tem amplitude mediana de **13,5 pontos contra 9,0** numa barra qualquer,
+portanto o mercado afasta-se do nível até ao fecho do minuto sem que esse
+minuto possa resolver o negócio, e o negócio começa vários pontos submerso. Com
+essa medição o pivot dava 78,3% — **abaixo** do acaso — e eu quase escrevi que
+os pivots eram activamente adversos. Entrando ao fecho, como o acaso, dá 82,0%:
+dentro da banda. A diferença entre as duas versões é de **1,17 pontos por
+negócio**, maior do que o custo inteiro.
+
+**O segundo foi apanhado por um teste.** Quando uma entrada cai na última barra
+da sessão não sobra barra válida nenhuma, `valid.sum(1) − 1` dá −1, e um índice
+−1 em numpy aponta para o fim do vector. A versão anterior usava `maximum(…, 0)`
+e ia buscar o preço de saída à **primeira barra da janela** — que já é a sessão
+seguinte. O negócio arrecadava o salto overnight inteiro. Nos dados reais eram
+5 negócios e valiam **+0,06 pontos por negócio, a favor da estratégia** — que é
+sempre a direcção perigosa, como o erro de excesso-contra-total da ronda 12.
+
+**E uma previsão minha que falhou.** Previ que o erro de antevisão do pivot
+(usar o nível 10 barras antes de ele se confirmar) valeria muito, por ser o
+erro mais comum nesta família. Vale **0,004 pontos** — nada. A razão: a entrada
+é o *primeiro toque* no nível, e o preço costuma voltar ao nível bastante
+depois da confirmação, portanto permitir negociá-lo 10 barras mais cedo quase
+nunca muda quando o toque acontece. O erro existe e é real noutras construções;
+nesta não morde.
+
+## O que fica
+
+A hipótese **não se valida**. Mais precisamente, e isto é melhor do que um
+simples "não funciona": a taxa de acerto alegada foi **reproduzida a partir de
+entradas aleatórias** mais um artefacto de preenchimento identificável. Não é
+preciso postular má fé nem sobreajuste — basta um backtest que deixa a barra de
+entrada pagar o alvo.
+
+As três perguntas que qualquer resultado desta família tem de responder antes
+de significar alguma coisa:
+
+1. **Qual é a taxa de acerto de entradas aleatórias no mesmo bracket?** Se for
+   igual, o sinal não existe. Com brackets assimétricos a resposta é sempre
+   S/(S+A), e é sempre igual ao ponto morto.
+2. **O que acontece se a barra de entrada não puder resolver o negócio?** Com
+   alvos pequenos a 1 minuto, é aí que está quase tudo.
+3. **Qual é a melhor célula de uma grelha do mesmo tamanho sobre ruído?** Se for
+   melhor do que a real, a procura encontrou sorte.
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1754,6 +1918,13 @@ a inspecção mais fina que o explicou.**
    já não é distinguível de zero com estes dados. Vem de comparar acções entre
    si — não de prever cada uma ao longo do tempo — e combinar algoritmos por
    cima dele não acrescenta nada demonstrável.
+
+9. **Uma taxa de acerto alta não é evidência de nada quando o bracket é
+   assimétrico** (ronda 17). Com stop S e alvo A, entradas aleatórias acertam
+   S/(S+A), que é exactamente o ponto morto. A estratégia de pivots a 25/5
+   alegava 89-91%; entradas aleatórias no mesmo bracket, deixando a barra de
+   entrada resolver o negócio, dão 89,07% [87,4 – 90,7]. A alegação foi
+   reproduzida sem sinal nenhum.
 
 O ponto 7 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.
