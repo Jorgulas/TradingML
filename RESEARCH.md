@@ -1976,6 +1976,105 @@ A parte publicável é a primeira: **62% de acerto sai de ruído puro**, e qualq
 alegação de taxa de acerto sobre uma regra que sai quando o preço recupera não
 mede acerto nenhum.
 
+# Ronda 19 — quatro horas ao minuto com 3000 euros, em euros
+
+Código: `src/research/live_simulation.py`, testes em `tests/test_live_simulation.py`.
+Dados: MNQ ao minuto, 27 033 barras, 20 sessões, **99 janelas de 4 horas que não
+se sobrepõem**.
+
+**O pedido** foi simular um algoritmo contínuo, a negociar ao minuto durante
+quatro horas, com 3000 euros — partindo de "temos um alto acerto com a USTEC e
+MNQ".
+
+**A premissa está invertida, e esta simulação existe para mostrar porquê em
+euros.** A ronda 17 não encontrou acerto alto no sentido útil. Encontrou que o
+acerto alto *não é informação*: com stop 25 e alvo 5, entradas completamente
+aleatórias acertam 83,33%, e medida honestamente a regra acerta 82% e perde
+1,28 pontos por negócio. Nesta estrutura, **acertar muito e perder dinheiro são
+a mesma coisa**.
+
+## A conta que decide tudo, antes de simular
+
+€3000 = **$3366**. MNQ vale $2 por ponto, logo um stop de 25 pontos custa **$50
+= 1,5% da conta** por negócio. Cada ida-e-volta custa ~1,10 pontos = **$2,20**.
+
+| negócios em 4h | custos | % da conta, **por dia** |
+|---|---|---|
+| 60 | $132 | 3,9% |
+| 120 | $264 | 7,8% |
+| 240 | $528 | **15,7%** |
+
+Para ficar empatado a negociar 240 vezes, a estratégia teria de gerar 15,7% de
+lucro bruto num dia. **A frequência é o inimigo de uma conta pequena**: o custo
+escala com o número de negócios e o capital não.
+
+## Quantos negócios cabem mesmo em quatro horas
+
+Não 240. Uma conta tem **uma posição de cada vez**, e com este bracket o
+negócio mediano dura ~3,4 minutos. Cabem **71,4** em média. É a restrição que
+mais mexe no resultado, e tem um teste só para ela.
+
+## A simulação, sobre 99 janelas reais
+
+| | negócios | acerto | bruto | custos | **líquido** | janelas positivas |
+|---|---|---|---|---|---|---|
+| ao minuto, 1 contrato | 71,4 | **82,0%** | −$36,68 | $157,13 | **−$193,82** | 15,2% |
+| ao minuto, 2 contratos | 71,4 | 82,0% | −$73,36 | $314,27 | **−$387,63** | 15,2% |
+| só no sinal, 1 contrato | 8,5 | 82,6% | +$0,29 | $18,69 | **−$18,40** | 41,4% |
+
+**Acerto de 82% e perda de $193,82 por sessão de quatro horas** — 5,76% da
+conta por dia. Mediana −$147,50, pior janela −$860,40, melhor +$225,20.
+
+O número que explica tudo: **81,1% da perda é custo puro**. No modo "só no
+sinal" é 101,6% — ou seja, o bruto é exactamente zero e a perda *é* o custo,
+nada mais.
+
+Duplicar o tamanho duplica a perda com precisão. Não há tamanho que resolva um
+sinal cuja esperança bruta é zero.
+
+## Quanto tempo dura a conta
+
+Reamostrando as sessões reais com reposição, até ficar sem margem:
+
+| | mediana | intervalo |
+|---|---|---|
+| ao minuto | **46 dias de negociação** (~9 semanas) | [35, 60] |
+| só no sinal | 496 dias (~2 anos) | [390, 628] |
+
+Um ano a fazer isto todos os dias: **100% de probabilidade de ruína** no modo
+contínuo, **0% de probabilidade de lucro** nos dois.
+
+## O que seria preciso, e o que falta
+
+| | |
+|---|---|
+| acerto necessário para empatar (25/5, custo 1,10) | **87,0%** |
+| acerto obtido na simulação | **82,0%** |
+| em falta | **5,0 pontos percentuais** |
+
+E a contrapartida honesta: **se os 89% fossem verdade, o plano funcionava.** A
+89% a esperança é +$1,20 por negócio, +$288 por dia, **+8,6% da conta por
+dia**. A aritmética do plano não é absurda — o que falha é a premissa. A 83,33%
+(entrada ao acaso) perde-se exactamente o custo, −$528/dia. A 82% perde-se
+−$720/dia.
+
+Os 89% existem, mas são o que se mede quando se deixa a barra de entrada
+arrumar o negócio. São um artefacto de medição, e um artefacto de medição não
+paga custos.
+
+## O que fica
+
+Três números resumem a ronda:
+
+1. **82% de acerto, −5,76% de conta por dia.** Num bracket assimétrico a taxa
+   de acerto e o resultado são variáveis independentes.
+2. **81% da perda é custo.** O mercado não tira o dinheiro — a frequência tira.
+3. **46 dias.** É quanto dura €3000 a negociar ao minuto quatro horas por dia.
+
+A única alavanca que melhora o resultado nesta simulação é negociar **menos**:
+de 71 negócios para 8,5 por sessão, a perda cai de $193,82 para $18,40. O
+limite dessa alavanca é zero negócios, que é onde a perda chega a zero.
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi

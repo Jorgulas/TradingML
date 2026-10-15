@@ -1206,6 +1206,35 @@ só 4 das 7 décadas são positivas: até 2001 os spreads comiam-no inteiro.
 líquidos. A 5 bps ganha por pouco, a 20 bps é esmagada: **o veredito inverte-se
 dentro da gama de custos que separa um intermediário de outro.**
 
+## Simulação: 4 horas ao minuto com 3000 euros
+
+`src/research/live_simulation.py`. MNQ ao minuto, **99 janelas de 4 horas que
+não se sobrepõem**, conta de €3000 = $3366, custo de 1,10 pontos ($2,20) por
+ida-e-volta.
+
+Em quatro horas não cabem 240 negócios: uma conta tem uma posição de cada vez
+e o negócio mediano dura 3,4 minutos, portanto cabem **71**.
+
+| | negócios | acerto | bruto | custos | líquido |
+|---|---|---|---|---|---|
+| ao minuto, 1 contrato | 71,4 | **82,0%** | −$36,68 | $157,13 | **−$193,82** |
+| ao minuto, 2 contratos | 71,4 | 82,0% | −$73,36 | $314,27 | −$387,63 |
+| só no sinal, 1 contrato | 8,5 | 82,6% | +$0,29 | $18,69 | −$18,40 |
+
+**82% de acerto com −5,76% de conta por dia**, e **81% da perda é custo puro**
+(no modo "só no sinal", 101,6% — o bruto é zero e a perda é exactamente o
+custo). Duplicar o tamanho duplica a perda.
+
+Mediana de **46 dias de negociação** até ficar sem margem (~9 semanas); 100%
+de probabilidade de ruína ao fim de um ano, 0% de probabilidade de lucro.
+
+Para empatar seria preciso **87,0%** de acerto e obtém-se **82,0%** — faltam 5
+pontos percentuais. Se os 89% alegados fossem verdade o plano daria +8,6% da
+conta por dia: a aritmética do plano não é absurda, a premissa é que falha.
+
+A única alavanca que melhora o resultado é negociar **menos** — de 71 para 8,5
+negócios a perda cai de $193,82 para $18,40 — e o limite dessa alavanca é zero.
+
 ## Testes
 
 ```bash
