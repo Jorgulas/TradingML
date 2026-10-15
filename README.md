@@ -1235,6 +1235,28 @@ conta por dia: a aritmética do plano não é absurda, a premissa é que falha.
 A única alavanca que melhora o resultado é negociar **menos** — de 71 para 8,5
 negócios a perda cai de $193,82 para $18,40 — e o limite dessa alavanca é zero.
 
+### Um ano a 8,5 negócios por sessão
+
+A ronda 19 reportou $808 de mediana e 0% de ruína para este caso. **Estava
+errado**: o composto multiplicava por (1+retorno), o que pressupõe ajustar o
+tamanho ao saldo, e com MNQ o mínimo é um contrato inteiro. A perda em dólares
+é fixa, portanto a conta desce em linha recta.
+
+| sizing | mediana ao fim do ano | ruína | sessões até à ruína |
+|---|---|---|---|
+| **fixo, 1 contrato** (executável) | **$0** | **95,3%** | **165** |
+| proporcional (não executável) | $793 | 0,0% | — |
+
+A conta do ano: 2 141 negócios, **$4 710 de custos = 140% da conta**, contra
+**+$73 de P&L bruto**. A conta aguenta 180 sessões só a pagar custos.
+
+Correndo o mesmo ano **sem custos nenhuns**: mediana **$3 366** — exactamente
+onde começou — e **50,0% de probabilidade de lucro**. Em bruto isto é uma moeda
+ao ar perfeita.
+
+Com 2 141 negócios o erro-padrão do acerto é 0,82pp: IC95% [81,0%, 84,2%],
+contra os 87,0% necessários. Mesmo o extremo optimista fica 2,8pp curto.
+
 ## Testes
 
 ```bash

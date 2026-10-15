@@ -169,3 +169,84 @@ def test_summary_counts_positive_windows():
     assert result["janelas_positivas"] == pytest.approx(0.25)
     assert result["pior_usd"] == -5.0
     assert result["melhor_usd"] == 10.0
+
+
+# --------------------------------------------------------------------------
+# 5. O ano inteiro, e a indivisibilidade do contrato
+# --------------------------------------------------------------------------
+
+def _sessions(pnl, balance=V.ACCOUNT_USD, days=None):
+    pnl = np.asarray(pnl, dtype=float)
+    return pd.DataFrame({"liquido_usd": pnl, "retorno": pnl / balance,
+                         "session": days if days is not None else range(len(pnl))})
+
+
+def test_fixed_size_falls_in_a_straight_line_and_proportional_does_not():
+    """A CORRECCAO QUE ESTA FUNCAO EXISTE PARA FAZER.
+
+    Com um contrato minimo indivisivel a perda em dolares nao encolhe quando a
+    conta encolhe, portanto a conta desce em linha recta e chega ao fim. Compor
+    percentagens pressupoe tamanho fraccionario e nunca chega a zero -- foi o
+    que a ronda 19 fez, e subestimou o estrago."""
+    losing = _sessions([-20.0] * 30)
+    fixed = V.year(losing, sessions=252, sizing="fixo", draws=300)
+    scaled = V.year(losing, sessions=252, sizing="proporcional", draws=300)
+
+    assert fixed["prob_ruina"] == pytest.approx(1.0)
+    assert scaled["prob_ruina"] == 0.0
+    assert scaled["mediana_fim"] > V.DAY_MARGIN
+
+
+def test_sessions_to_ruin_matches_the_arithmetic():
+    """Perda fixa de 20 USD sobre 3366: a margem de 200 e' atingida ao fim de
+    (3366-200)/20 = 159 sessoes. Se nao bater, a contabilidade esta' errada."""
+    result = V.year(_sessions([-20.0] * 10), sessions=252, sizing="fixo",
+                    draws=200)
+    assert result["sessoes_ate_ruina"] == pytest.approx(159, abs=1)
+
+
+def test_a_winning_distribution_does_not_ruin():
+    """Sem este, o teste anterior nao prova nada: um simulador que arruinasse
+    sempre passaria os dois."""
+    result = V.year(_sessions([+20.0] * 10), sessions=252, sizing="fixo",
+                    draws=200)
+    assert result["prob_ruina"] == 0.0
+    assert result["prob_lucro"] == pytest.approx(1.0)
+    assert result["mediana_fim"] == pytest.approx(V.ACCOUNT_USD + 252 * 20)
+
+
+def test_a_fair_coin_ends_where_it_started():
+    """O contrafactual sem custos: se o bruto for mesmo zero em media, o ano
+    acaba onde comecou e a probabilidade de lucro e' metade."""
+    result = V.year(_sessions([+60.0, -60.0] * 20), sessions=252,
+                    sizing="fixo", draws=3000, by_day=False)
+    assert result["mediana_fim"] == pytest.approx(V.ACCOUNT_USD, rel=0.08)
+    assert result["prob_lucro"] == pytest.approx(0.5, abs=0.08)
+
+
+def test_day_resampling_weights_days_equally_not_windows():
+    """Sao 99 janelas mas 20 dias distintos, e os dias nao tem todos o mesmo
+    numero de janelas. O dia e' a unidade independente: um dia com o triplo das
+    janelas nao vale o triplo.
+
+    Construcao que separa as duas: 30 janelas de +100 num dia, 10 de -100
+    noutro. Por JANELA a media e' +50; por DIA e' zero. Se a funcao devolvesse
+    o mesmo nos dois casos, nao estaria a reamostrar dias de todo."""
+    pnl = [100.0] * 30 + [-100.0] * 10
+    days = ["bom"] * 30 + ["mau"] * 10
+    frame = _sessions(pnl, days=days)
+
+    by_day = V.year(frame, sessions=200, sizing="fixo", draws=1500, by_day=True)
+    by_window = V.year(frame, sessions=200, sizing="fixo", draws=1500,
+                       by_day=False)
+
+    # Por janela ganha-se +50 por sessao em media: 200 x 50 = +10000.
+    assert by_window["mediana_fim"] > V.ACCOUNT_USD + 7000
+    # Por dia a esperanca e' zero, portanto a conta ou aguenta perto do inicio
+    # ou arruina-se pelo caminho -- nunca acumula dez mil.
+    assert by_day["mediana_fim"] < V.ACCOUNT_USD + 2000
+    assert by_day["prob_lucro"] < by_window["prob_lucro"]
+
+
+def test_year_needs_a_non_empty_result():
+    assert V.year(pd.DataFrame(), sessions=252) == {}

@@ -2075,6 +2075,88 @@ A única alavanca que melhora o resultado nesta simulação é negociar **menos*
 de 71 negócios para 8,5 por sessão, a perda cai de $193,82 para $18,40. O
 limite dessa alavanca é zero negócios, que é onde a perda chega a zero.
 
+# Ronda 20 — um ano a 8,5 negócios por sessão, e uma correcção à ronda 19
+
+Código: `src/research/live_simulation.py` (função `year`), testes em
+`tests/test_live_simulation.py`. 99 janelas reais de 4 horas, **20 dias
+distintos**, 252 sessões.
+
+A ronda 19 mostrou que a única alavanca que melhorava o resultado era negociar
+menos: de 71 para 8,5 negócios por sessão, a perda caía de $193,82 para $18,40.
+A pergunta seguinte é o que isso dá ao fim de um ano.
+
+## Primeiro, uma correcção ao que eu disse na ronda 19
+
+O `compound()` da ronda 19 multiplicava o saldo por (1 + retorno). **Isso
+pressupõe que se ajusta o tamanho da posição ao saldo** — e com MNQ o mínimo é
+**um contrato inteiro**. A perda em dólares não encolhe quando a conta encolhe,
+portanto a conta desce em **linha recta** e não geometricamente, e chega ao fim
+muito mais depressa do que o composto sugeria.
+
+| sizing | mediana ao fim do ano | ruína | sessões até à ruína | lucro |
+|---|---|---|---|---|
+| **fixo, 1 contrato** (executável) | **$0** | **95,3%** | **165** | 0,0% |
+| proporcional (não executável) | $793 | 0,0% | — | 0,0% |
+
+A ronda 19 reportou $808 e 0% de ruína. Era o caso proporcional, e subestimava
+o estrago. **O número certo é 95,3% de ruína ao fim de 165 sessões — cerca de
+oito meses.**
+
+Reamostrar **dias** em vez de janelas (são 99 janelas mas 20 dias) quase não
+mexe: 95,3% contra 94,3%. A conclusão não depende da estrutura de dependência.
+
+## A conta do ano, linha a linha
+
+| | |
+|---|---|
+| conta inicial | **$3 366** |
+| negócios no ano (252 × 8,5) | 2 141 |
+| **custos do ano** (2141 × $2,20) | **$4 710 = 140% da conta** |
+| **P&L bruto do ano** (+$0,29/sessão) | **+$73** |
+| P&L líquido esperado | **−$4 637** |
+
+A conta aguenta **180 sessões só a pagar custos**, mesmo que o mercado lhe dê
+exactamente zero. E dá-lhe praticamente exactamente zero: +$73 em 2 141
+negócios.
+
+## O contrafactual que fecha o argumento
+
+Correndo o mesmo ano **sem custos nenhuns**, com as mesmas janelas:
+
+> mediana ao fim do ano: **$3 366** — exactamente onde começou.
+> probabilidade de lucro: **50,0%**. Ruína: 0,1%.
+
+Em bruto, isto é **uma moeda ao ar perfeita**. É a confirmação mais limpa
+possível da tese da ronda 17: não há sinal nenhum por baixo, e tudo o que
+acontece ao longo do ano é o custo a comer a conta.
+
+## E o que seria preciso
+
+| acerto | por negócio | ano | conta ao fim |
+|---|---|---|---|
+| 89,00% (alegado) | +$1,20 | **+$2 569** | $5 935 (+76,3%) |
+| **87,00%** (ponto morto) | $0,00 | $0 | $3 366 |
+| **82,64%** (obtido) | −$2,62 | **−$5 600** | −$2 234 (−166%) |
+
+Os 2 141 negócios de um ano dão um erro-padrão de 0,82pp sobre a taxa de
+acerto: IC95% **[81,0%, 84,2%]**. Mesmo o extremo optimista fica **2,8 pontos
+percentuais** abaixo do ponto morto. Não é falta de amostra — a esta cadência,
+um ano chega perfeitamente para decidir, e decide que não.
+
+## O que fica
+
+Negociar menos melhora o resultado, e melhora-o por uma razão que não escala
+até ao lucro: **reduz o custo, e o bruto já era zero.** De 71 para 8,5 negócios
+por sessão a perda anual passa de certa-e-rápida para certa-e-lenta — 46 dias
+contra 165. A continuação dessa alavanca é zero negócios, onde a perda é zero.
+
+Três números:
+
+1. **$4 710 de custos contra $73 de lucro bruto** num ano.
+2. **Sem custos, o ano acaba exactamente onde começou**, com 50,0% de
+   probabilidade de lucro. É uma moeda.
+3. **95,3% de ruína, mediana de 165 sessões.**
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi

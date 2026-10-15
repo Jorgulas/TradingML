@@ -129,6 +129,7 @@ def simulate(frame: pd.DataFrame, lo: int, hi: int, mode: str = "continuo",
         return {"n": 0, "fim": balance}
     return {
         "n": len(table),
+        "session": frame["session"].to_numpy()[lo],
         "acerto": float(table["won"].mean()),
         "bruto_usd": float((table["gross"] * POINT_VALUE * contracts).sum()),
         "custos_usd": float(len(table) * cost * POINT_VALUE * contracts),
@@ -265,3 +266,70 @@ def run() -> dict:
 
 if __name__ == "__main__":
     run()
+
+
+# ---------------------------------------------------------------------------
+# Um ano inteiro a esta cadencia
+# ---------------------------------------------------------------------------
+
+def year(result: pd.DataFrame, sessions: int = 252, sizing: str = "fixo",
+         balance: float = ACCOUNT_USD, draws: int = 5000, seed: int = 20,
+         by_day: bool = True) -> dict:
+    """Um ano de sessoes, reamostrando janelas reais.
+
+    `sizing` E' A CORRECCAO QUE ESTA FUNCAO EXISTE PARA FAZER. A ronda 19
+    compos retornos percentuais, o que pressupoe que se ajusta o tamanho da
+    posicao ao saldo. Com MNQ o minimo e' UM CONTRATO INTEIRO: a perda em
+    dolares nao encolhe quando a conta encolhe, portanto a conta desce em LINHA
+    RECTA e nao geometricamente, e chega ao fim mais depressa do que o
+    composto sugeria.
+
+      fixo         -- 1 contrato sempre. E' o que se pode fazer de facto.
+      proporcional -- escala com o saldo. Nao e' executavel com um contrato
+                      minimo; serve so' para mostrar quanto da diferenca vem da
+                      indivisibilidade.
+
+    `by_day=True` REAMOSTRA DIAS E NAO JANELAS. Sao 99 janelas mas apenas 20
+    dias distintos, e janelas do mesmo dia partilham regime e volatilidade.
+    Tratar 99 observacoes como independentes estreitaria o intervalo pelo mesmo
+    erro da ronda 7."""
+    if result.empty:
+        return {}
+    rng = np.random.default_rng(seed)
+
+    if by_day and "session" in result.columns:
+        groups = [part.index.to_numpy() for _, part in result.groupby("session")]
+    else:
+        groups = [np.array([i]) for i in result.index]
+
+    pnl = result["liquido_usd"].to_numpy(float)
+    ret = result["retorno"].to_numpy(float)
+    ends = np.empty(draws)
+    ruin_at = []
+
+    for draw in range(draws):
+        equity, ruined = balance, False
+        for step in range(sessions):
+            pool = groups[rng.integers(len(groups))]
+            pick = pool[rng.integers(len(pool))]
+            if sizing == "fixo":
+                equity += pnl[pick]
+            elif sizing == "proporcional":
+                equity *= 1.0 + ret[pick]
+            else:
+                raise ValueError(f"sizing desconhecido: {sizing}")
+            if equity < DAY_MARGIN:
+                ruin_at.append(step + 1)
+                equity, ruined = 0.0, True
+                break
+        ends[draw] = equity
+
+    return {
+        "sizing": sizing,
+        "mediana_fim": float(np.median(ends)),
+        "p5": float(np.quantile(ends, 0.05)),
+        "p95": float(np.quantile(ends, 0.95)),
+        "prob_ruina": len(ruin_at) / draws,
+        "sessoes_ate_ruina": float(np.median(ruin_at)) if ruin_at else np.nan,
+        "prob_lucro": float((ends > balance).mean()),
+    }
