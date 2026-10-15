@@ -1814,6 +1814,168 @@ de significar alguma coisa:
 3. **Qual é a melhor célula de uma grelha do mesmo tamanho sobre ruído?** Se for
    melhor do que a real, a procura encontrou sorte.
 
+# Ronda 18 — o RSI(2) de Connors: o efeito é real e perde à mesma para o índice
+
+Código: `src/research/connors_rsi2.py`, testes em `tests/test_connors_rsi2.py`.
+Dados: 222 acções com histórico diário completo, 1962–2026, das quais **160
+sobreviventes e 62 caídas do índice** (as da ronda 8). 100 245 negócios.
+
+**A estratégia**, do livro de Larry Connors e Cesar Alvarez (2008): compra-se
+quando o fecho está acima da média de 200 dias, abaixo da média de 5 dias e o
+RSI(2) está abaixo de 10. Vende-se quando o fecho volta acima da média de 5
+dias. Sem stop — Connors recomenda explicitamente não o usar. As alegações
+públicas andam nos 71–75% de acerto.
+
+Apliquei-lhe o protocolo da ronda 17.
+
+## A taxa de acerto não é prova de nada, outra vez
+
+Um dos backtests públicos reporta 71,2% de acerto com **ganho médio de 1,22% e
+perda média de 2,10%**. Pela aritmética da ronda 17, isso põe o ponto morto em
+2,10/(2,10+1,22) = **63,25%**. Os 71% valem **8 pontos percentuais de margem**,
+não 71.
+
+E a taxa de acerto é **fabricada pela regra de saída**. Sair quando o preço
+recupera acima da média de 5 dias selecciona vencedores por construção: todo o
+negócio que fecha por regra fecha num preço localmente alto, e as perdas são só
+as que nunca recuperaram dentro do limite de dias. Corri a regra completa sobre
+**caminhadas aleatórias sem deriva nenhuma**:
+
+> **acerto 62,3%, média −0,077%, ponto morto implicado 63,9%**
+
+Sessenta e dois por cento de acerto a partir de ruído puro. É o análogo exacto
+dos 83,33% da ronda 17.
+
+O acerto é também um botão, até saturar: 53,5% com limite de 2 dias, 57,5% com
+3, 64,0% com 5, 66,1% com 10, e daí para cima não mexe.
+
+## Mas a média sobrevive a todas as linhas de base
+
+Aqui a estratégia separa-se do bracket de pivots. Escada completa, 160
+sobreviventes, execução na abertura seguinte, 10 pontos base de custo:
+
+| | n | acerto | média | por dia | IC95% |
+|---|---|---|---|---|---|
+| **regra completa** | 100 245 | 66,1% | **+0,51%** | +0,133% | [+0,46%, +0,56%] |
+| acaso, mesma regra de saída | 100 213 | 58,6% | +0,16% | +0,061% | [+0,12%, +0,19%] |
+| acaso só acima da MA200 | 100 209 | 58,1% | +0,13% | +0,052% | [+0,11%, +0,16%] |
+| acaso em qualquer recuo | 100 175 | 64,5% | +0,27% | +0,082% | [+0,24%, +0,31%] |
+| comprar e esperar emparelhado | 100 245 | 50,8% | +0,20% | +0,052% | [+0,17%, +0,22%] |
+
+A linha que interessa é a penúltima: entradas ao acaso em **qualquer recuo
+dentro de uma tendência**, sem RSI nenhum, dão +0,27%. A regra dá +0,51%. Os
+intervalos não se tocam. **O RSI acrescenta +0,24% por negócio sobre "compra
+qualquer queda".** Isso é mais do que qualquer coisa que este projecto tenha
+construído sozinho.
+
+Mais: a grelha de 48 parametrizações (período do RSI, limiar, médias) é
+**positiva em 48 de 48**, e a melhor célula real (+0,0105) está muito acima da
+melhor célula de uma grelha do mesmo tamanho sobre recuos ao acaso (mediana
++0,0030, máximo +0,0031), com **p(ruído ≥ real) = 0,0000**. Não é sorte de
+procura.
+
+## O viés de sobrevivência explica um quarto, não tudo
+
+Era aqui que eu esperava que morresse. Comprar quedas é a estratégia mais
+contaminada que existe: num universo de sobreviventes, todas as quedas
+recuperaram — é isso que significa ter sobrevivido. Nenhum backtest público
+testa isto.
+
+Nas **62 acções que caíram do índice**: regra +0,37% [+0,29%, +0,46%], contra o
+comprar-e-esperar emparelhado delas, +0,14% [+0,07%, +0,21%]. O efeito é **73%
+do tamanho** que tem nos sobreviventes. A sobrevivência explica ~27% — contra
+os ~50% que explicava o sinal transversal da ronda 8.
+
+## As décadas, e o que os custos da época fazem
+
+Com custo fixo de 10 pontos base, as **sete décadas são positivas**. Mas
+aplicar custos de hoje a 1965 atribui à estratégia um lucro que nenhum
+participante da época poderia ter tido — até Maio de 1975 as comissões eram
+fixas, e os oitavos duraram até 1997:
+
+| década | custo da época | média | |
+|---|---|---|---|
+| 1960 | 150 bps | **−1,26%** | |
+| 1970 | 120 bps | **−1,00%** | |
+| 1980 | 70 bps | **−0,23%** | |
+| 1990 | 50 bps | +0,53% | |
+| 2000 | 20 bps | +0,56% | |
+| 2010 | 8 bps | +0,41% | |
+| 2020 | 5 bps | +0,40% | |
+
+**Quatro de sete.** O efeito bruto existia nas três primeiras décadas, mas era
+pequeno (+0,14%, +0,10%, +0,37%) e os custos da época comiam-no inteiro. A
+estratégia não é antiga: é uma coisa que a decimalização de 2001 tornou
+possível.
+
+E **não decaiu depois de publicada**, o que me surpreendeu: 2001–2008 dá
++0,115% por dia e 2009–2026 dá +0,114%. O livro é de 2008.
+
+## E depois a carteira, que é onde isto acaba
+
+Tudo acima é por negócio. A ronda 12 estabeleceu que isso não chega: o que
+conta é a curva de uma carteira que se possa deter de facto, contra a
+alternativa gratuita. Carteira de peso igual sobre as posições abertas, 160
+acções, 1962–2026:
+
+| | ret/ano | volatilidade | Sharpe | pior queda |
+|---|---|---|---|---|
+| estratégia bruta | 25,66% | 20,08% | 1,28 | −49,8% |
+| estratégia líquida 5 bps | 21,98% | 20,09% | 1,09 | −50,8% |
+| **estratégia líquida 10 bps** | **18,40%** | 20,09% | **0,92** | −52,5% |
+| estratégia líquida 20 bps | 11,56% | 20,11% | 0,58 | −55,9% |
+| **comprar e esperar, peso igual** | **17,70%** | 16,79% | **1,05** | −48,4% |
+
+A 10 pontos base a estratégia devolve **18,40% contra 17,70%** — 0,7pp a mais
+de retorno, comprados com **3,3pp a mais de volatilidade e 4 pontos a mais de
+queda máxima**. Em Sharpe: **0,92 contra 1,05**. Perde.
+
+A razão é a rotação. São 724 posições abertas por ano sobre uma média de 12,8
+posições detidas: **56 rotações por unidade de capital por ano**, cada uma a
+pagar o custo inteiro. A 5 pontos base a estratégia ganha por pouco (1,09 contra
+1,05); a 10 perde; a 20 é esmagada. **O veredito inverte-se dentro da gama de
+custos que separa um intermediário de outro.**
+
+## Três erros meus
+
+**O primeiro inverteu números que eu já tinha dito em voz alta.** A primeira
+carteira cobrava custo em todos os sinais, incluindo os que disparam numa acção
+que já estava em carteira — e esses não abrem posição nenhuma. Eram 1549
+"negócios" por ano contra 724 posições reais, e o resultado lia-se 7,32%/ano com
+queda de 63,2%. Corrigido: 18,40% e −52,5%. O erro ia contra a estratégia, que é
+a direcção rara neste projecto.
+
+**O segundo foi uma hipótese que testei e saiu falsa.** Propus que o fosso entre
+o negócio médio (+0,138%/dia) e a carteira (+0,110%/dia) viesse de os sinais
+dispararem em cacho nos dias maus. Medi: dias com 32 posições abertas rendem
+**+0,128%** e dias com 2 posições rendem **+0,112%**. Os dias de cacho são os
+*melhores*. O fosso vem de outra coisa — de os negócios sobrepostos na mesma
+acção contarem duas vezes na estatística por negócio e uma só na carteira.
+
+**E uma previsão que falhou, pela segunda ronda seguida.** Previ que comprar ao
+fecho em que o RSI(2) é calculado seria uma antevisão cara. A versão executável
+— entrar e sair na abertura seguinte — dá **+0,687% contra +0,649%**. É
+*melhor*. Duas rondas a prever que a antevisão de uma barra inflacionaria o
+resultado, duas vezes errado.
+
+## O que fica
+
+O RSI(2) não é o bracket de pivots. Tem um efeito bruto real que passou todos
+os placebos que lhe montei: bate entradas ao acaso no mesmo pool de recuos com
+intervalos que não se tocam, replica em 62 acções que caíram do índice, é
+positivo em 48 de 48 parametrizações, e a melhor célula está fora da
+distribuição do ruído.
+
+E mesmo assim **não bate comprar e ficar quieto nas mesmas acções**, porque a
+rotação de 56 vezes por ano converte um bruto de 25,66% num líquido de 18,40%
+com mais risco. Repete-se o padrão da ronda 12 com um sinal muito melhor por
+baixo: há competência real na previsão, e ela não sobrevive ao atrito de a
+executar.
+
+A parte publicável é a primeira: **62% de acerto sai de ruído puro**, e qualquer
+alegação de taxa de acerto sobre uma regra que sai quando o preço recupera não
+mede acerto nenhum.
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -1925,6 +2087,15 @@ a inspecção mais fina que o explicou.**
    alegava 89-91%; entradas aleatórias no mesmo bracket, deixando a barra de
    entrada resolver o negócio, dão 89,07% [87,4 – 90,7]. A alegação foi
    reproduzida sem sinal nenhum.
+
+10. **Uma taxa de acerto alta sai de ruído puro sempre que a regra de saída
+    espera pela recuperação** (ronda 18). O RSI(2) de Connors dá 62,3% de
+    acerto sobre caminhadas aleatórias sem deriva. O efeito de média, esse, é
+    real — bate entradas ao acaso no mesmo pool de recuos, replica nas 62
+    acções que caíram do índice e é positivo em 48 de 48 parametrizações — mas
+    a rotação de 56 vezes por ano converte 25,66%/ano brutos em 18,40%
+    líquidos com Sharpe 0,92, contra 17,70% e Sharpe 1,05 de comprar e ficar
+    quieto nas mesmas acções.
 
 O ponto 7 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.

@@ -1166,6 +1166,46 @@ Uma sequência máxima de 5 perdas em 300 negócios tem p = 0,26% a uma taxa de
 90%. Essa sequência é típica de **61%** de acerto — onde a esperança é −7,80
 pontos por negócio.
 
+## O RSI(2) de Connors, com o mesmo protocolo
+
+Segunda estratégia pública passada pelo protocolo da ronda 17. Regra do livro
+de Connors e Alvarez (2008): comprar quando o fecho está acima da MA200,
+abaixo da MA5 e o RSI(2) abaixo de 10; vender quando o fecho volta acima da
+MA5. Alegações públicas: 71-75% de acerto. Código em
+`src/research/connors_rsi2.py`. 222 acções, 1962-2026, 100 245 negócios.
+
+### A taxa de acerto sai de ruído puro
+
+Com ganho médio de 1,22% e perda média de 2,10%, o ponto morto é **63,25%** —
+os 71% valem 8pp de margem, não 71. E a regra de saída fabrica o acerto: sair
+quando o preço recupera selecciona vencedores por construção. Sobre
+**caminhadas aleatórias sem deriva**, a mesma regra dá **62,3% de acerto com
+média −0,077%**.
+
+### Mas o efeito de média é real
+
+| | média/negócio | IC95% |
+|---|---|---|
+| regra completa | **+0,51%** | [+0,46%, +0,56%] |
+| acaso em qualquer recuo (sem RSI) | +0,27% | [+0,24%, +0,31%] |
+| comprar e esperar emparelhado | +0,20% | [+0,17%, +0,22%] |
+
+Intervalos que não se tocam, 48 de 48 parametrizações positivas, p(ruído ≥
+real) = 0,0000, e **73% do efeito mantém-se nas 62 acções que caíram do
+índice** — a sobrevivência explica ~27%, não tudo. Com custos da época, porém,
+só 4 das 7 décadas são positivas: até 2001 os spreads comiam-no inteiro.
+
+### E perde à mesma para comprar e ficar quieto
+
+| | ret/ano | vol | Sharpe | pior queda |
+|---|---|---|---|---|
+| estratégia líquida 10 bps | 18,40% | 20,09% | **0,92** | −52,5% |
+| comprar e esperar, peso igual | 17,70% | 16,79% | **1,05** | −48,4% |
+
+56 rotações por unidade de capital por ano convertem 25,66% brutos em 18,40%
+líquidos. A 5 bps ganha por pouco, a 20 bps é esmagada: **o veredito inverte-se
+dentro da gama de custos que separa um intermediário de outro.**
+
 ## Testes
 
 ```bash
