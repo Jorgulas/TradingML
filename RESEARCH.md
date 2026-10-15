@@ -2157,6 +2157,115 @@ Três números:
    probabilidade de lucro. É uma moeda.
 3. **95,3% de ruína, mediana de 165 sessões.**
 
+# Ronda 21 — o RSI(2) ao minuto: o primeiro bruto que excede o custo, e é salto bid-ask
+
+Código: `src/research/live_simulation.py` (`rsi_frame`, `rsi_signals`,
+`resolve_connors`), testes em `tests/test_live_simulation.py`. MNQ ao minuto,
+99 janelas de 4 horas, **20 dias distintos**, conta de €3000.
+
+A ronda 18 encontrou no RSI(2) um efeito bruto real em barras **diárias**. A
+ronda 17 não encontrou nada no bracket de pivots ao **minuto**. Trocar o sinal
+pergunta se o efeito da ronda 18 é uma propriedade do prazo diário ou reversão
+à média em geral.
+
+O pedido confunde duas coisas, por isso correm-se as duas: trocar o **sinal de
+entrada** e trocar a **regra de saída**.
+
+## As três variantes
+
+| | negócios/janela | acerto | bruto | custos | **líquido** | janelas+ |
+|---|---|---|---|---|---|---|
+| pivots + bracket 25/5 | 8,5 | 82,9% | +$0,29 | $18,69 | **−$18,40** | 41,4% |
+| RSI(2) + bracket 25/5 | 6,5 | **86,7%** | +$16,03 | $14,22 | **+$1,81** | 60,3% |
+| RSI(2) + saída Connors | 5,5 | **69,8%** | +$21,62 | $12,18 | **+$9,44** | 56,2% |
+
+Repare-se na ilustração perfeita da tese destas rondas: a variante com o
+**maior acerto de todas** (86,7%) ganha $1,81, e a com o **menor** (69,8%) ganha
+$9,44. **Cinco vezes mais dinheiro com 17 pontos percentuais menos de
+acerto.** O bracket de 5 pontos corta os ganhos; a saída de Connors deixa-os
+correr.
+
+## E o bruto por negócio é, pela primeira vez, maior que o custo
+
+Contra entradas ao acaso **emparelhadas na contagem**:
+
+| | bruto por negócio | negócios |
+|---|---|---|
+| **RSI(2)** | **+1,9530 pts = +$3,91** | 404 |
+| acaso emparelhado | +0,0293 pts = +$0,06 | 22 447 |
+| custo | −1,1000 pts = −$2,20 | |
+
+O bruto é **1,8× o custo**, e 65× o do acaso por negócio. Em dezoito rondas
+este projecto nunca tinha medido nada ao minuto cujo bruto excedesse o atrito.
+
+## Mas decai com o atraso de entrada, e isso tem nome
+
+O sinal compra logo a seguir a uma queda brusca — exactamente onde o fecho da
+barra é provavelmente uma transacção ao preço de **compra**, e a barra seguinte
+volta ao de **venda**. É o contaminante que a ronda 11 isolou no CLV. O teste é
+adiar a entrada:
+
+| atraso | bruto/negócio | líquido/janela | IC95% |
+|---|---|---|---|
+| 0 (fecho do sinal) | **+1,9530 pts** | +$9,44 | [−3,78, +24,03] |
+| 1 minuto | +1,3084 pts | +$2,62 | [−7,27, +13,34] |
+| **2 minutos** | **+0,7639 pts** | −$4,96 | [−16,37, +5,84] |
+| 3 minutos | +1,0518 pts | −$0,78 | [−16,44, +13,71] |
+| 5 minutos | +0,2560 pts | −$14,36 | [−29,21, +0,79] |
+
+**O bruto cai para metade num minuto e abaixo do custo em dois.** É a
+assinatura do salto bid-ask, não de um movimento negociável. E o atraso zero
+não é executável como está escrito: pressupõe comprar ao fecho da barra em que
+o RSI foi calculado, que é o preço a que alguém acabou de vender.
+
+**Em nenhum atraso o intervalo exclui zero.** Nem sequer no zero.
+
+## O ano, e porque não o sei
+
+Com 20 dias e um desvio entre dias de $36,85, seriam precisos **59 dias de
+negociação (~2,8 meses)** para o intervalo excluir zero a este tamanho de
+efeito. Com o que há:
+
+| hipótese sobre a média verdadeira (atraso 0) | ano | conta final |
+|---|---|---|
+| limite inferior do IC (−$3,78) | −$953 | $2 414 (−28,3%) |
+| média observada (+$9,44) | +$2 379 | $5 745 (+70,7%) |
+| limite superior do IC (+$24,17) | +$6 091 | $9 457 (+180,9%) |
+
+No atraso 1, o único executável, o ano dá **+$660 com IC [−$1 832, +$3 362]**.
+
+A amostra são 20 dias de Setembro e Outubro de 2026 — **um regime**. A ronda 18
+tinha 100 245 negócios em 64 anos. Isto tem 404 negócios em 20 dias.
+
+## Um erro meu, apanhado por um teste e que não chegou a contaminar nada
+
+O `resolve_connors` fazia `break` na fronteira de sessão mas devolvia o preço
+de `close[stop_at]`, que já era da sessão seguinte — o negócio arrecadava o
+salto overnight inteiro, 410 pontos no teste sintético que o apanhou. É
+**exactamente o mesmo erro da ronda 17, em código novo**: não basta parar o
+ciclo, tem de se guardar a última barra válida e sair nessa.
+
+Nos dados reais não mudou um único número, porque as janelas nunca atravessam
+sessões por construção. O defeito era latente. Deixo-o registado porque a
+lição é que eu volto a cometê-lo.
+
+## O que fica
+
+O RSI(2) é claramente melhor que os pivots ao minuto: tem um bruto real, 65×
+o do acaso por negócio, e é a primeira coisa deste projecto a esse prazo cujo
+bruto excede o custo. E mesmo assim **não se converte**, por duas razões
+separadas:
+
+1. **Mais de metade do bruto desaparece no primeiro minuto depois do sinal.**
+   O que resta ao primeiro atraso executável fica abaixo do custo ao segundo.
+2. **Vinte dias não decidem.** Em nenhum atraso, incluindo o contaminado, o
+   intervalo exclui zero.
+
+A pergunta honesta que fica em aberto, e que 59 dias de dados resolveriam: ao
+atraso de um minuto, o bruto de 1,31 pontos contra um custo de 1,10 é real ou é
+o resto do mesmo salto? É a única coisa neste projecto a prazo de minuto que
+vale a pena voltar a medir com mais dados.
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi

@@ -76,7 +76,8 @@ def windows(frame: pd.DataFrame, minutes: int = MINUTES) -> list:
 def simulate(frame: pd.DataFrame, lo: int, hi: int, mode: str = "continuo",
              contracts: int = 1, stop: float = STOP, target: float = TARGET,
              cost: float = COST_POINTS, balance: float = ACCOUNT_USD,
-             rng=None, levels_table: pd.DataFrame = None) -> dict:
+             rng=None, levels_table: pd.DataFrame = None,
+             signals: dict = None) -> dict:
     """Uma janela, uma posicao de cada vez, sequencialmente.
 
     Sequencial e nao vectorizado de proposito: uma conta real nao pode ter
@@ -106,22 +107,32 @@ def simulate(frame: pd.DataFrame, lo: int, hi: int, mode: str = "continuo",
                 i += 1
                 continue
             side = int(sides[i])
+        elif mode in ("rsi_bracket", "rsi_connors"):
+            if i not in signals:
+                i += 1
+                continue
+            side = int(signals[i])
+        elif mode == "acaso_connors":
+            side = int(rng.choice([-1, 1]))
         else:
             raise ValueError(f"modo desconhecido: {mode}")
 
         if equity < DAY_MARGIN * contracts:      # sem margem, acabou
             break
 
-        result = T.resolve(frame, np.array([i]), np.array([close[i]]),
-                           np.array([side]), stop, target,
-                           max_bars=min(120, hi - i), model="honesta",
-                           start_offset=1)
-        gross = float(result["gross"].iloc[0])
-        held = int(result["bars_held"].iloc[0])
+        if mode in ("rsi_connors", "acaso_connors"):
+            gross, held = resolve_connors(frame, i, side, hi,
+                                          max_bars=min(120, hi - i))
+        else:
+            result = T.resolve(frame, np.array([i]), np.array([close[i]]),
+                               np.array([side]), stop, target,
+                               max_bars=min(120, hi - i), model="honesta",
+                               start_offset=1)
+            gross = float(result["gross"].iloc[0])
+            held = int(result["bars_held"].iloc[0])
         net_usd = (gross - cost) * POINT_VALUE * contracts
         equity += net_usd
-        trades.append({"gross": gross, "net_usd": net_usd,
-                       "won": result["outcome"].iloc[0] == "alvo"})
+        trades.append({"gross": gross, "net_usd": net_usd, "won": gross > 0})
         i += max(held, 1)
 
     table = pd.DataFrame(trades)
@@ -147,12 +158,18 @@ def run_all(mode: str = "continuo", contracts: int = 1, seed: int = 19,
     frame = frame[frame.groupby("session")["close"].transform("size") > 200]
     frame = T.add_session(frame.reset_index(drop=True))
     table = T.levels(frame, 10, 10) if mode == "sinal" else None
+    signals = None
+    if mode in ("rsi_bracket", "rsi_connors"):
+        frame = rsi_frame(frame)
+        signals = rsi_signals(frame, short_side=kwargs.pop("short_side", False))
+    elif mode == "acaso_connors":
+        frame = rsi_frame(frame)
 
     rng = np.random.default_rng(seed)
     rows = []
     for lo, hi in windows(frame):
         rows.append(simulate(frame, lo, hi, mode, contracts, rng=rng,
-                             levels_table=table, **kwargs))
+                             levels_table=table, signals=signals, **kwargs))
     return pd.DataFrame([r for r in rows if r.get("n", 0) > 0])
 
 
@@ -333,3 +350,96 @@ def year(result: pd.DataFrame, sessions: int = 252, sizing: str = "fixo",
         "sessoes_ate_ruina": float(np.median(ruin_at)) if ruin_at else np.nan,
         "prob_lucro": float((ends > balance).mean()),
     }
+
+
+# ---------------------------------------------------------------------------
+# O RSI(2) ao minuto -- a regra da ronda 18 no instrumento da ronda 17
+# ---------------------------------------------------------------------------
+#
+# PORQUE VALE A PENA. A ronda 18 encontrou no RSI(2) um efeito bruto REAL em
+# barras diarias: +0.51% por negocio contra +0.27% de entradas ao acaso no
+# mesmo poco de recuos, com intervalos que nao se tocam. A ronda 17 nao
+# encontrou efeito nenhum no bracket de pivots. Transplantar o RSI(2) para o
+# minuto pergunta se o efeito da ronda 18 e' uma propriedade do prazo diario
+# ou reversao a media em geral.
+#
+# E separa duas coisas que o pedido confunde: trocar o SINAL DE ENTRADA e
+# trocar a REGRA DE SAIDA. Por isso correm-se as duas versoes --
+#   rsi_bracket -- entrada por RSI(2), saida pelo bracket 25/5 da ronda 17.
+#                  Isola o sinal de entrada, com tudo o resto igual.
+#   rsi_connors -- entrada por RSI(2), saida de Connors (fecho acima da media
+#                  rapida), sem stop. E' a regra verdadeira do livro.
+#
+# A media de 200 BARRAS ao minuto sao 3h20. Calcula-se DENTRO da sessao, como
+# tudo neste projecto desde a ronda 10: uma media que atravessasse a noite
+# misturaria o fecho de ontem com a abertura de hoje e o salto overnight
+# apareceria como sinal.
+
+RSI_PERIOD, RSI_FAST, RSI_SLOW = 2, 5, 200
+RSI_THRESHOLD = 10.0
+
+
+def rsi_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Indicadores de Connors calculados sessao a sessao."""
+    from src.research import connors_rsi2 as U
+
+    parts = []
+    for _, part in frame.groupby("session", sort=True):
+        part = part.copy()
+        close = part["close"].to_numpy(float)
+        part["ma_fast"] = part["close"].rolling(RSI_FAST).mean()
+        part["ma_slow"] = part["close"].rolling(RSI_SLOW).mean()
+        part["rsi"] = U.wilder_rsi(close, RSI_PERIOD)
+        parts.append(part)
+    return pd.concat(parts).sort_index()
+
+
+def rsi_signals(frame: pd.DataFrame, short_side: bool = False) -> dict:
+    """Barras de entrada -> sentido. Longo e' a regra do livro; o curto e' o
+    espelho (abaixo da media lenta, acima da rapida, RSI acima de 100-limiar),
+    e existe para o resultado nao depender de o indice ter subido na amostra."""
+    ok = frame[["ma_fast", "ma_slow", "rsi"]].notna().all(axis=1).to_numpy()
+    close = frame["close"].to_numpy(float)
+    fast = frame["ma_fast"].to_numpy(float)
+    slow = frame["ma_slow"].to_numpy(float)
+    rsi = frame["rsi"].to_numpy(float)
+
+    longs = ok & (close > slow) & (close < fast) & (rsi < RSI_THRESHOLD)
+    out = {int(i): 1 for i in np.flatnonzero(longs)}
+    if short_side:
+        shorts = ok & (close < slow) & (close > fast) & (rsi > 100 - RSI_THRESHOLD)
+        out.update({int(i): -1 for i in np.flatnonzero(shorts)})
+    return out
+
+
+def resolve_connors(frame: pd.DataFrame, index: int, side: int, hi: int,
+                    max_bars: int = 120) -> tuple:
+    """Saida de Connors: sai quando o fecho volta acima da media rapida (ou
+    abaixo, se estiver vendido). Sem stop -- Connors recomenda explicitamente
+    nao o usar, e e' por isso que a perda media dele e' maior do que o ganho.
+
+    Fica limitado pelo fim da janela e pela sessao: nao se deixa uma posicao
+    sem stop atravessar a noite num futuro alavancado."""
+    close = frame["close"].to_numpy(float)
+    fast = frame["ma_fast"].to_numpy(float)
+    session = frame["session"].to_numpy()
+    stop_at = min(index + max_bars, hi, len(frame) - 1)
+
+    entry = close[index]
+    last = index
+    for step in range(index + 1, stop_at + 1):
+        # A fronteira de sessao apanhou-me duas vezes. A versao anterior fazia
+        # `break` aqui mas depois saia em close[stop_at], que ja' era da sessao
+        # seguinte -- o negocio arrecadava o salto overnight inteiro, 410
+        # pontos no teste que o apanhou. E' o mesmo erro da ronda 17, em codigo
+        # novo: nao basta parar o ciclo, tem de se guardar a ultima barra
+        # VALIDA e sair nessa.
+        if session[step] != session[index]:
+            break
+        last = step
+        if np.isnan(fast[step]):
+            continue
+        recovered = close[step] > fast[step] if side > 0 else close[step] < fast[step]
+        if recovered:
+            return side * (close[step] - entry), step - index
+    return side * (close[last] - entry), last - index

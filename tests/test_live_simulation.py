@@ -250,3 +250,76 @@ def test_day_resampling_weights_days_equally_not_windows():
 
 def test_year_needs_a_non_empty_result():
     assert V.year(pd.DataFrame(), sessions=252) == {}
+
+
+# --------------------------------------------------------------------------
+# 6. O RSI(2) ao minuto
+# --------------------------------------------------------------------------
+
+def _rsi_frame(close, session="2026-03-02"):
+    close = np.asarray(close, dtype=float)
+    frame = pd.DataFrame({
+        "ts": pd.date_range(f"{session} 14:30", periods=len(close), freq="1min",
+                            tz="UTC"),
+        "open": close, "high": close, "low": close, "close": close, "volume": 1,
+    })
+    frame = T.add_session(frame)
+    frame["ma_fast"] = frame["close"].rolling(3).mean()
+    frame["ma_slow"] = frame["close"].rolling(5).mean()
+    frame["rsi"] = 0.0
+    return frame
+
+
+def test_connors_exit_fires_on_the_first_recovery():
+    """Sai na PRIMEIRA barra em que o fecho volta acima da media rapida. Se
+    saisse mais tarde, estaria a escolher o melhor momento com informacao que
+    nao tinha."""
+    frame = _rsi_frame([100, 99, 98, 97, 96, 95, 110, 130, 150])
+    gross, held = V.resolve_connors(frame, 5, 1, hi=8, max_bars=10)
+    assert held == 1                       # recupera logo na barra seguinte
+    assert gross == pytest.approx(110 - 95)
+
+
+def test_connors_exit_never_crosses_the_session():
+    """Uma posicao sem stop num futuro alavancado nao atravessa a noite."""
+    first = _rsi_frame([100] * 6 + [90, 90], session="2026-03-02")
+    second = _rsi_frame([500] * 8, session="2026-03-09")
+    frame = pd.concat([first, second]).reset_index(drop=True)
+    frame = T.add_session(frame)
+    frame["ma_fast"] = frame["close"].rolling(3).mean()
+    gross, _ = V.resolve_connors(frame, 6, 1, hi=15, max_bars=10)
+    assert gross == pytest.approx(0.0, abs=1e-9)   # fecha na sua propria sessao
+
+
+def test_connors_exit_stops_at_the_window_edge():
+    frame = _rsi_frame([100, 99, 98, 97, 96, 95, 94, 93, 92, 91])
+    _, held = V.resolve_connors(frame, 4, 1, hi=7, max_bars=50)
+    assert 4 + held <= 7
+
+
+def test_the_short_side_mirrors_the_long():
+    """Uma venda sai quando o preco cai ABAIXO da media rapida. Sem isto o
+    resultado dependeria de o indice ter subido na amostra."""
+    frame = _rsi_frame([100, 101, 102, 103, 104, 105, 90, 80, 70])
+    gross, held = V.resolve_connors(frame, 5, -1, hi=8, max_bars=10)
+    assert held == 1
+    assert gross == pytest.approx(105 - 90)
+
+
+def test_rsi_signals_need_all_three_conditions():
+    frame = _rsi_frame(np.linspace(100, 120, 40))
+    frame["rsi"] = 50.0                                # RSI nunca abaixo de 10
+    assert V.rsi_signals(frame) == {}
+    frame["rsi"] = 5.0                                 # agora dispara onde couber
+    frame.loc[:, "ma_fast"] = frame["close"] + 1.0     # fecho abaixo da rapida
+    frame.loc[:, "ma_slow"] = frame["close"] - 1.0     # fecho acima da lenta
+    assert len(V.rsi_signals(frame)) > 0
+
+
+def test_short_signals_only_appear_when_asked():
+    frame = _rsi_frame(np.linspace(120, 100, 40))
+    frame["rsi"] = 95.0
+    frame.loc[:, "ma_fast"] = frame["close"] - 1.0
+    frame.loc[:, "ma_slow"] = frame["close"] + 1.0
+    assert V.rsi_signals(frame, short_side=False) == {}
+    assert all(v == -1 for v in V.rsi_signals(frame, short_side=True).values())

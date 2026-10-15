@@ -1257,6 +1257,35 @@ ao ar perfeita.
 Com 2 141 negócios o erro-padrão do acerto é 0,82pp: IC95% [81,0%, 84,2%],
 contra os 87,0% necessários. Mesmo o extremo optimista fica 2,8pp curto.
 
+### O RSI(2) ao minuto, em vez dos pivots
+
+| | negócios/janela | acerto | bruto | custos | líquido |
+|---|---|---|---|---|---|
+| pivots + bracket 25/5 | 8,5 | 82,9% | +$0,29 | $18,69 | **−$18,40** |
+| RSI(2) + bracket 25/5 | 6,5 | **86,7%** | +$16,03 | $14,22 | +$1,81 |
+| RSI(2) + saída Connors | 5,5 | **69,8%** | +$21,62 | $12,18 | **+$9,44** |
+
+A variante com **maior acerto** ganha $1,81 e a com **menor** ganha $9,44 —
+cinco vezes mais dinheiro com 17pp menos de acerto.
+
+Bruto por negócio: RSI(2) **+1,9530 pts** contra **+0,0293** de entradas ao
+acaso emparelhadas na contagem, com custo de 1,10. É a primeira coisa deste
+projecto ao minuto cujo bruto excede o atrito.
+
+**Mas decai com o atraso de entrada** — a assinatura do salto bid-ask da ronda
+11:
+
+| atraso | bruto/negócio | líquido/janela |
+|---|---|---|
+| 0 | +1,9530 pts | +$9,44 [−3,78, +24,03] |
+| 1 min | +1,3084 pts | +$2,62 [−7,27, +13,34] |
+| 2 min | +0,7639 pts | −$4,96 |
+| 5 min | +0,2560 pts | −$14,36 |
+
+Metade do bruto desaparece no primeiro minuto e o resto cai abaixo do custo no
+segundo. **Em nenhum atraso o intervalo exclui zero** — são 404 negócios em 20
+dias, e seriam precisos ~59 dias para decidir.
+
 ## Testes
 
 ```bash
