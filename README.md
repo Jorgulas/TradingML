@@ -1286,6 +1286,45 @@ Metade do bruto desaparece no primeiro minuto e o resto cai abaixo do custo no
 segundo. **Em nenhum atraso o intervalo exclui zero** — são 404 negócios em 20
 dias, e seriam precisos ~59 dias para decidir.
 
+## Mercados de previsão: a Polymarket está calibrada
+
+`src/research/prediction_market.py`. Dados públicos, sem conta nem chave.
+**1 250 mercados resolvidos, 682 499 negócios, 8 543 carteiras.**
+
+Num mercado binário compra-se a `p` e recebe-se $1, logo **o ponto morto É o
+preço** — a lei da ronda 17, aqui impressa no ecrã em vez de escondida num
+bracket.
+
+| | |
+|---|---|
+| desvio global (preço vs frequência) | **+0,00285** [−0,00161, +0,00698] |
+| mínimo detectável | 0,0059 = **1,18% por aposta** |
+| regra "só 20¢–95¢" do coinman2 | **+0,0012** [−0,0068, +0,0085] |
+
+### A perícia não persiste
+
+Correlacionando cada carteira consigo própria entre as duas metades da amostra:
+**Spearman +0,017 (p=0,46)** no z, +0,005 no retorno. O decil de topo da
+primeira metade rende **−0,034** na segunda, contra −0,001 de todos.
+
+A cauda longe tem excesso real (23 carteiras com z>3 contra 5,1 esperadas), mas
+o corpo é mais fino que a normal e o z médio é −0,085: o apostador típico paga
+o spread.
+
+### Quem ganha são arbitragistas
+
+115 carteiras com variância ~zero — compram os dois lados — fizeram **+$24 091
+sobre $1 061 347, +2,27%, sem risco**. Escrever a variância em contratos por
+resultado (e não num preço médio) é o que permite distinguir um arbitragista de
+um apostador com sorte impossível.
+
+### Um gradiente que era endogeneidade
+
+Encontrei o desvio a cair com a espessura do mercado, Spearman −0,297
+(p<0,0001). Mas o número de negócios é determinado **em parte pelo desfecho**:
+um mercado que vira no fim atrai muito mais negociação. Medindo a espessura só
+nos primeiros 60s, o efeito cai para −0,130 — mais de metade era artefacto.
+
 ## Testes
 
 ```bash

@@ -2266,6 +2266,191 @@ atraso de um minuto, o bruto de 1,31 pontos contra um custo de 1,10 é real ou �
 o resto do mesmo salto? É a única coisa neste projecto a prazo de minuto que
 vale a pena voltar a medir com mais dados.
 
+# Ronda 22 — a Polymarket está calibrada, e a perícia não persiste
+
+Código: `src/research/prediction_market.py`, testes em
+`tests/test_prediction_market.py`. Dados públicos da Polymarket — **sem conta,
+sem chave, sem descarregar nada**, dois endpoints HTTP abertos.
+
+Chegou-me uma ferramenta que promete "engenharia inversa" de bots da Polymarket
+e dizer, de cada um, se foi perícia ou sorte. Não a instalei. A pergunta que ela
+não faz é a única que decide tudo, e os dados para a responder são públicos.
+
+## A aritmética, que aqui vem impressa no ecrã
+
+Num mercado binário compra-se a `p` e recebe-se 1 dólar. Logo **o ponto morto É
+o preço**: comprar a 90¢ exige 90% de acerto para empatar. É a mesma lei da
+ronda 17 — S/(S+A) no bracket de futuros — mas lá estava escondida na estrutura
+do bracket e **aqui o mercado cota-a**.
+
+Portanto não se testa um bot. Testa-se o mercado: se os contratos a 80¢
+resolverem a favor 80% das vezes, a esperança é exactamente zero para toda a
+gente antes de taxas, e todo o lucro de qualquer bot é desvio ou sorte.
+
+## A amostra
+
+| | |
+|---|---|
+| mercados resolvidos | **1 250** (300 BTC 5m, 700 ETH 5m, 250 ETH 15m) |
+| negócios | **682 499** |
+| carteiras | **8 543** |
+| janela | 28–29 de Outubro de 2026 |
+
+**A unidade de observação é o MERCADO.** Mil e setecentos negócios partilham UMA
+resolução; tratá-los como independentes é o erro das janelas sobrepostas da
+ronda 7 na forma mais agressiva. Todos os intervalos vêm de reamostrar mercados.
+
+## 1. Está calibrada
+
+> **desvio global +0,00285, IC95% [−0,00161, +0,00698]**
+
+E pela primeira vez neste projecto **a amostra não é o factor limitante**: o
+mínimo detectável é 0,0059, ou **1,18% de retorno por aposta a 50¢**. Qualquer
+taxa plausível é maior. Não é "não encontrei nada" — é que um desvio grande o
+bastante para pagar as taxas teria aparecido.
+
+Aguenta em todas as fases da vida do mercado, incluindo o último minuto onde os
+bots de velocidade operavam (primeiros 120s +0,0017; últimos 60s −0,0034; ambos
+com zero dentro).
+
+## 2. A regra do coinman2 não captura nada
+
+"Só comprar entre 20¢ e 95¢, porque abaixo de 20¢ perdeu dinheiro."
+
+| banda | n | desvio | IC95% |
+|---|---|---|---|
+| 0–20¢ | 83 498 | +0,0150 | [−0,0086, +0,0409] |
+| **20–95¢** | 526 840 | **+0,0012** | [−0,0068, +0,0085] |
+| 95–100¢ | 72 161 | +0,0007 | [−0,0158, +0,0138] |
+
+Dentro da própria banda, **exactamente zero a ±0,8pp**. E abaixo de 20¢ o ponto
+estimado é *positivo* — os azarões pagaram mais do que custaram, o contrário do
+que a regra pressupõe.
+
+Dei-lhe a leitura generosa possível, a de que capturaria o viés favorito-azarão
+documentado na literatura de apostas. Não captura: nesta amostra esse viés não
+existe, e o pouco que há aponta ao contrário.
+
+## 3. Perícia ou sorte: não persiste
+
+Dividindo a amostra ao meio no tempo e correlacionando cada carteira consigo
+própria:
+
+| | Spearman | p |
+|---|---|---|
+| z das carteiras (n = 1 837) | **+0,0174** | 0,456 |
+| retorno das carteiras | +0,0054 | 0,817 |
+| arbitragistas (n = 21) | +0,1766 | 0,444 |
+
+E o decil de topo da primeira metade rende **z médio −0,034** na segunda, contra
+−0,001 de toda a gente: ligeiramente *pior*. Para comparação, a forma da cauda
+da ronda 15 — que estabelecemos como característica real e durável — persistia a
++0,18/+0,22.
+
+Ordenar carteiras pelo passado é possível. Essa ordem não prevê o futuro.
+
+**Mas a cauda longe tem excesso, e seria desonesto não o dizer:**
+
+| | observadas | esperadas | rácio |
+|---|---|---|---|
+| z > 1 | 396 | 599,9 | **0,66** |
+| z > 2 | 96 | 86,0 | 1,12 |
+| z > 3 | **23** | 5,1 | **4,51** |
+
+O corpo é mais *fino* que a normal e o z médio é −0,085: o apostador típico paga
+o spread. A cauda extrema é 4,5× mais gorda do que devia. Alguém ganha mesmo —
+e, sendo a calibração global zero, ganha aos outros participantes e não ao
+mercado. O que não se verifica é que continue na metade seguinte.
+
+## 4. Os vencedores são arbitragistas, não previsores
+
+Ao calcular o z apareceram valores de 97 000. Não era erro: são carteiras
+**cobertas** — compram Up *e* Down — cuja variância é zero. Uma arbitragem
+verdadeira tem mesmo Sharpe infinito.
+
+Escrever a variância em **contratos por resultado** em vez de num preço médio é o
+que torna isto correcto: uma posição de `a` contratos num lado e `b` no outro tem
+variância p(1−p)(a−b)², que dá zero quando a = b. Um preço médio trataria um
+arbitragista como um apostador com sorte impossível.
+
+115 de 3 896 carteiras: **+$24 091 sobre $1 061 347 apostados, +2,27%, sem
+risco**. 66 das 115 com lucro positivo. O dinheiro que ali se ganha não vem de
+prever nada — vem de estar nos dois lados mais depressa que os outros. Isso pede
+infraestrutura, não uma estratégia que se leia de um histórico.
+
+## 5. A arbitragem do par, como limite superior
+
+Par médio **0,9877**, mediana da margem **exactamente 0,0000**. 51,9% dos
+instantes com par abaixo de $1,00; 12,2% abaixo de $0,95.
+
+É um **limite superior**: tomo o melhor preço de cada lado dentro de 2 segundos,
+que podem ser dois negócios de contrapartes diferentes, e quem quisesse o par
+teria de acertar nos dois. A taxa de taker declarada no próprio mercado é
+`takerBaseFee: 1000` contra uma margem média de 1,2 cêntimos por par. A mediana
+ser exactamente $1,00 é o facto.
+
+## Um erro meu, apanhado por desconfiança da minha própria medida
+
+Encontrei um gradiente lindíssimo: o desvio caía monotonicamente com a espessura
+do mercado, de +0,018 no quintil mais fino para −0,027 no mais denso, com
+Spearman **−0,2968 (p<0,0001)** dentro do BTC. Parecia um resultado de
+eficiência de manual.
+
+Desconfiei porque **o número de negócios de um mercado é determinado em parte
+pelo desfecho**: um mercado onde o preço vira no fim atrai muito mais
+negociação, e nesse caso o preço de consenso estava errado por construção.
+Medindo a espessura só nos **primeiros 60 segundos** e o desvio só depois dos
+120:
+
+| medida de espessura | Spearman (BTC) | p |
+|---|---|---|
+| negócios totais (endógena) | −0,2968 | <0,0001 |
+| **primeiros 60s (ex-ante)** | **−0,1295** | 0,025 |
+
+Mais de metade do efeito era endogeneidade. A espessura ex-ante prevê o volume
+total a +0,85, portanto não destruí o sinal com uma medida fraca. O que sobra é
+fraco e vem depois de muitos testes meus — pelo critério da ronda 17, não é
+achado.
+
+## A única coisa que apareceu, e as réplicas que a mataram
+
+| família | mercados | neg/merc | desvio | IC95% |
+|---|---|---|---|---|
+| btc5m | 300 | 1 737 | +0,00177 | [−0,0038, +0,0073] |
+| **eth5m** | 700 | 157 | **+0,00940** | **[+0,0041, +0,0146]** |
+| eth15m | 250 | 206 | −0,00019 | [−0,0070, +0,0071] |
+
+O ETH de 5 minutos aguentou: medido primeiro com 200 mercados a +0,0132, e com
+700 ainda em +0,0094, fora do zero. Sobreviveu a cortar os 20 mercados extremos
+de cada lado e replicou internamente nas duas metades do tempo.
+
+**E falha as duas réplicas naturais.** Mesma duração, outro activo (BTC 5m):
+zero. Mesmo activo, outra duração (ETH 15m): zero. E o ETH 15m é tão fino como o
+ETH 5m — 206 contra 157 negócios por mercado — **o que também mata a hipótese da
+espessura**.
+
+Uma família em três, a falhar os dois controlos, depois de eu ter corrido muitos
+testes. Fica registado como o sítio onde algo aparece, não como achado. Seria
++1,58% bruto por aposta, contra a taxa declarada.
+
+## O que isto acrescenta ao estudo
+
+**Confirma a ronda 17 na forma mais pura possível.** Lá o ponto morto de 83,33%
+estava escondido num bracket 25/5 e tive de o derivar; aqui o mercado imprime-o.
+É a mesma lei em dois mercados sem nada em comum.
+
+**E é a primeira experiência deste projecto com poder a sério.** A ronda 14
+precisava de 13 a 42 anos; a ronda 21 precisava de 59 dias e tinha 20. Esta tem
+mínimo detectável de 1,18% por aposta com **25 horas de recolha**, porque estes
+mercados resolvem 288 vezes por dia. Se alguma vez quisermos testar a descoberta
+durável da ronda 5 — a sazonalidade de volatilidade intradiária — é este o banco
+de ensaio: um mercado que cota probabilidades explícitas, onde P(S_T > K) é
+directamente calculável, sem escolha de horizonte nem rótulos.
+
+**O que não acrescenta: nenhuma estratégia.** Os três bots do vídeo são, pela
+medição, um arbitragista (morto por taxas), um negociante de latência (morto
+quando a latência fechou) e um apostador num mercado calibrado.
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -2386,6 +2571,15 @@ a inspecção mais fina que o explicou.**
     a rotação de 56 vezes por ano converte 25,66%/ano brutos em 18,40%
     líquidos com Sharpe 0,92, contra 17,70% e Sharpe 1,05 de comprar e ficar
     quieto nas mesmas acções.
+
+11. **Um mercado de previsão líquido está calibrado, e a perícia dos seus
+    participantes não persiste** (ronda 22). Sobre 1 250 mercados da
+    Polymarket e 682 499 negócios, o desvio entre preço e frequência realizada
+    é +0,00285 [−0,00161, +0,00698], com mínimo detectável de 1,18% por
+    aposta. A correlação entre o desempenho de uma carteira na primeira metade
+    da amostra e na segunda é +0,017 (p=0,46), e o decil de topo rende depois
+    ligeiramente abaixo da média. Quem ganha de forma consistente tem
+    variância zero: são arbitragistas, não previsores.
 
 O ponto 7 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.
