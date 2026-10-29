@@ -171,12 +171,20 @@ def connect(path=None):
 
 
 def ingest(conn, family: str = "btc5m", markets: int = 500,
-           skip_recent: int = 4, verbose: bool = True) -> dict:
+           skip_recent: int = 4, stride: int = 1, verbose: bool = True) -> dict:
     """Enumera slugs para tras no tempo e guarda mercado + negocios.
 
     `skip_recent` salta os mercados mais recentes, que ainda nao resolveram --
     um mercado por resolver entraria com `winner` nulo e seria descartado mais
-    tarde, mas gastaria dois pedidos."""
+    tarde, mas gastaria dois pedidos.
+
+    `stride` salta de `stride` em `stride` mercados em vez de apanhar
+    consecutivos. Com stride=1 e 1000 mercados de 5 minutos cobrem-se 3,5 dias
+    seguidos, o que da' UMA passagem por cada hora do dia -- inutil para medir
+    um efeito de hora do dia, porque cada hora aparece uma vez e o que se mede
+    e' esse dia. Com stride=6 os mesmos 1000 pedidos espalham-se por 20 dias a
+    dois mercados por hora, e cada hora do dia passa a ter 20 observacoes em
+    dias diferentes. E' a diferenca entre poder medir sazonalidade e nao."""
     spec = FAMILIES[family]
     now = int(time.time())
     base = (now // spec["step"]) * spec["step"] - spec["step"] * skip_recent
@@ -187,7 +195,7 @@ def ingest(conn, family: str = "btc5m", markets: int = 500,
     saved_markets = saved_trades = 0
 
     for step in range(markets):
-        epoch = base - spec["step"] * step
+        epoch = base - spec["step"] * stride * step
         slug = f"{spec['prefix']}{epoch}"
         if slug in known:
             continue

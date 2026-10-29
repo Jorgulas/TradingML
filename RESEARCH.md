@@ -2451,6 +2451,248 @@ directamente calculável, sem escolha de horizonte nem rótulos.
 medição, um arbitragista (morto por taxas), um negociante de latência (morto
 quando a latência fechou) e um apostador num mercado calibrado.
 
+# Ronda 23 — a sazonalidade da ronda 5 existe em cripto, e o mercado cota-a inteira
+
+Código: `src/research/volatility_seasonality.py`, 30 testes em
+`tests/test_volatility_seasonality.py`. Dados: 28 dias de barras de um minuto
+de BTC e ETH, e **3 964 mercados / 3,1 milhões de negócios** da Polymarket
+recolhidos ao longo de 20 dias.
+
+A ronda 22 fechou a dizer que estes mercados eram o banco de ensaio certo para
+a única descoberta durável do programa — a sazonalidade intradiária da ronda 5 —
+porque cotam probabilidades explícitas e resolvem 288 vezes por dia. Esta ronda
+foi lá.
+
+## Porque é que a pergunta é testável aqui, e só a meio da janela
+
+Num mercado "Up ou Down" de cinco minutos o strike é o preço no início da
+janela, logo **no instante zero P(Up) = 0,5 para qualquer volatilidade** e a
+sazonalidade é irrelevante. A meio da janela já não: com o subjacente em `S_t`,
+strike `K` e `tau` segundos por correr,
+
+    p = Phi( (S_t - K) / (sigma * raiz(tau)) )
+
+e aqui sigma manda em tudo. Isso deu-me duas coisas raras neste projeto.
+
+**Uma previsão assinada.** Se o mercado usar uma volatilidade constante e a hora
+for de volatilidade alta, o |d| verdadeiro é menor do que o mercado supõe, a
+probabilidade verdadeira está mais perto de 0,5, e os favoritos estão **caros** —
+ganham menos vezes do que o preço diz. Nas horas calmas, o contrário. Portanto o
+erro de nitidez tinha de correlacionar-se **negativamente** com a volatilidade
+realizada da hora. Não é "há alguma relação": é um sinal específico, previsto
+antes de medir.
+
+**Um placebo de graça, dado pela própria física.** Perto de p = 0,5 o preço não
+contém informação sobre sigma, porque Phi(0) = 0,5 para toda e qualquer
+volatilidade. Não foi preciso inventar um controlo — ele estava lá.
+
+## A amostra, e porque teve de ser recolhida de outra maneira
+
+Os 1 250 mercados da ronda 22 cobrem **25 horas seguidas**. Cada hora do dia
+aparece uma vez, portanto "a hora 14" seria aquela tarde de 28 de Outubro e não
+uma hora do dia. Mudei a recolha para **amostragem estratificada**: um mercado a
+cada 30 minutos ao longo de três semanas, pelo `stride` novo em
+`prediction_market.ingest`. Cada hora do dia passou a ter 20 dias diferentes
+por trás.
+
+| família | mercados | negócios | dias |
+|---|---|---|---|
+| btc5m | 1 210 | 1 795 570 | 21 |
+| btc15m | 960 | 899 231 | 21 |
+| eth5m | 1 544 | 249 354 | 21 |
+
+---
+
+# Parte A — a sazonalidade existe num ativo que não tem sessão
+
+O "J" da ronda 5 vem dos leilões de abertura e fecho das ações americanas.
+Cripto negocia 24 horas por dia, sete dias por semana, e não tem leilão nenhum.
+A primeira pergunta não era se o mercado paga pela sazonalidade — era se ela
+**existe**.
+
+Existe, e tem uma origem clara.
+
+| | BTC | ETH | ronda 5 (ações) |
+|---|---|---|---|
+| Spearman do perfil (em amostra) | **0,1645** | 0,1517 | 0,3078 |
+| mesmo, com horas embaralhadas | +0,0001 | −0,0002 | — |
+| amplitude | **2,36×** | 2,09× | 4,09× ± 0,45 |
+
+O baseline de ruído é o que fecha a questão: embaralhando as horas o Spearman cai
+para 0,0001, com percentil 97,5 em 0,0089. O efeito real é **18 vezes** o topo
+da distribuição nula.
+
+**E o perfil é a sessão americana importada.** Pico às 13–15 UTC, que são as
+09:30–11:00 de Nova Iorque; segunda corcova à 01–02 UTC (Ásia); vale às 20–21 e
+às 04–07.
+
+| hora UTC | 06 | 13 | **14** | 15 | 20 | 21 |
+|---|---|---|---|---|---|---|
+| BTC | 0,79 | 1,52 | **1,72** | 1,47 | 0,76 | 0,73 |
+| ETH | 0,78 | 1,47 | **1,63** | 1,47 | 0,80 | 0,83 |
+
+Um ativo que nunca fecha tem o relógio de volatilidade da bolsa que fecha.
+
+## Três diferenças face à ronda 5, e nenhuma é a favor
+
+**O envelhecimento é plano, como lá.** Este era o teste decisivo da ronda 5 e
+dá o mesmo qualitativo: um perfil de três semanas serve tão bem como um de
+ontem.
+
+| idade do perfil | 1 dia | 3 | 7 | 14 | 21 |
+|---|---|---|---|---|---|
+| Spearman (BTC) | 0,136 | 0,157 | 0,168 | 0,147 | 0,117 |
+
+**Mas o oráculo aqui está inflacionado e não serve de teto.** O perfil do próprio
+dia dá 0,329 contra 0,136 fora da amostra — uma perda de 59%, onde as ações
+perdiam 4,4%. Não é a sazonalidade a falhar: é o oráculo a apanhar o
+*agrupamento* de volatilidade daquele dia, que não é sazonalidade nenhuma. Na
+ronda 5 o oráculo era um mês de 160 ações e esse agrupamento diluía-se. Comparar
+os dois números como se medissem a mesma coisa seria errado, e por isso o que
+conta é o nível fora da amostra, ~0,15.
+
+**Mais histórico ajuda, ao contrário da ronda 5.** Lá um mês valia o mesmo que
+doze. Aqui sobe monotonicamente: 1 dia 0,095 → 7 dias 0,161 → 21 dias 0,193.
+Com um ativo só, não há 160 tickers para médiar o idiossincrático.
+
+**E o perfil deriva de facto de um dia para o outro.** A dispersão diária é 21%
+a 69%, contra os 4,8%–11,4% mensais da ronda 5 — mas comparar isso a seco seria
+comparar tamanhos de amostra. Simulei o **chão de ruído**: um mundo onde o
+perfil é exatamente constante e só a amostra varia.
+
+| | observado | chão de ruído | excesso |
+|---|---|---|---|
+| BTC, mediana | 29,4% | 13,3% | **+122%** |
+| ETH, mediana | 31,8% | 13,5% | +136% |
+
+Duas vezes o chão. Metade da agitação diária é amostra, a outra metade é deriva
+verdadeira. À escala semanal cai para 7,9%–24,1% com correlação de forma 0,63
+entre semanas, mais perto dos 0,79 mensais da ronda 5.
+
+---
+
+# Parte B — o mercado cota a sazonalidade inteira
+
+Dois caminhos independentes, um pelos **preços** e outro pelos **desfechos**.
+
+## A medida direta: a volatilidade implícita curva-se como a realizada?
+
+Invertendo p = Phi(d) negócio a negócio obtém-se a sigma que o mercado está a
+cotar. Normalizando os dois perfis pela média, o declive do implícito sobre o
+realizado é a resposta em unidades: **1,0 = cota a sazonalidade inteira, 0 =
+ignora-a**.
+
+| família | declive | correlação | amplitude implícita | realizada |
+|---|---|---|---|---|
+| **btc5m** | **+1,099 ± 0,111** | +0,811 | 3,07× | 2,36× |
+| **eth5m** | **+0,991 ± 0,070** | +0,857 | 2,32× | 2,09× |
+| btc15m | +0,751 ± 0,126 | +0,693 | 2,85× | 2,36× |
+
+O perfil implícito reproduz a forma ponto por ponto — pico às 14 (1,88 implícito
+contra 1,72 realizado no btc5m), corcova asiática à 01–02, vale às 20–21. **O
+mercado conhece o relógio da abertura de Nova Iorque e cobra por ele.**
+
+Antes de acreditar na junção, validei-a: se o strike está certo, o sinal de
+`S_t − K` tem de concordar com o sinal de `p − 0,5`. Concorda em **80,3%** dos
+1,38 milhões de negócios do btc5m (85,6% no btc15m), contra 50% se o strike
+estivesse errado.
+
+E a atenuação joga **contra** a conclusão, não a favor: o ruído de resolução de
+um minuto pesa mais nas horas calmas, onde o desvio verdadeiro é pequeno, logo
+levanta-as e **achata** o perfil implícito. Fica num teste. O declive medido é
+um limite inferior — um 1,0 não pode ser ruído a inflacionar a leitura.
+
+## A medida indireta: a previsão assinada falha, como tinha de falhar
+
+| família | Spearman | IC95% (por dias) | declive de nitidez |
+|---|---|---|---|
+| btc5m | +0,009 | [−0,286, +0,244] | **+0,0111 ± 0,0268** |
+| btc15m | −0,230 | [−0,393, +0,102] | −0,0533 ± 0,0350 |
+| eth5m | −0,109 | [−0,247, +0,096] | −0,0173 ± 0,0244 |
+
+Todos contêm zero. E isto não é "não encontrei nada": simulei o que um mercado
+que **ignorasse** a sazonalidade produziria, com o perfil real do BTC e a
+amostra real.
+
+| | declive de nitidez |
+|---|---|
+| mercado que ignora a sazonalidade | **−0,1050** (sd entre corridas 0,0125) |
+| mercado que a cota bem | +0,0032 |
+| **btc5m medido** | **+0,0111 ± 0,0268** → ignorância a **4,3 sigma** |
+| eth5m medido | −0,0173 ± 0,0244 → ignorância a 3,6 sigma |
+
+O placebo também se comporta: no btc5m o declive na banda informativa é +0,018
+e na banda 0,44–0,56 é −0,033, ambos zero — não havia efeito para desaparecer.
+
+## O btc15m era a única exceção, e morreu na própria réplica
+
+Os 15 minutos ficavam a meio caminho pelas duas medidas ao mesmo tempo: declive
+de vol implícita 0,751 (1,0 a dois sigma) e declive de nitidez −0,053 (a 1,5
+sigma de zero *e* de −0,105). Duas medições independentes a apontarem na mesma
+direção, o que é o padrão de um achado.
+
+Parti a amostra em duas metades, como na ronda 22:
+
+| btc15m | declive de vol implícita |
+|---|---|
+| 1.ª metade (10 dias) | **+0,325 ± 0,176** |
+| 2.ª metade (11 dias) | **+1,057 ± 0,165** |
+| por semana | 0,793 / 1,219 / 0,848 |
+
+As duas metades estão a **três sigma uma da outra** — não são duas medidas da
+mesma coisa. O 0,751 agregado é a média de estimativas instáveis, não um nível.
+O btc5m, no mesmo teste: 1,163 e 1,030 por metade, 1,182 / 1,107 / 0,921 por
+semana. Todas compatíveis com 1,0.
+
+E a persistência do perfil horário do erro — ronda 5, teste 2, aplicado ao erro
+**do mercado** — é ruído nas três famílias: +0,44, −0,15, +0,04, contra um
+desvio-padrão nulo de **0,27** que medi em simulação. Nenhuma distingue nada.
+
+---
+
+## Um erro meu, grande, apanhado porque foi grande
+
+A coluna da ronda 22 chama-se `end_epoch`. **Li o nome em vez de medir.** O
+epoch do slug é o **início** da janela, não o fim: subtraí-lo de `ts` dava um
+tempo-por-correr negativo em 95% dos negócios — mediana −132 segundos num
+mercado de 300 — e o meu filtro `tau > 0` deitou fora **1,8 dos 1,9 milhões** de
+negócios do btc5m, deixando só os poucos cotados antes da abertura. Nessa
+amostra esquisita a previsão assinada do btc5m lia **+0,509 com p = 0,011**:
+significativa, e com o sinal ao contrário do previsto.
+
+A prova está na própria distribuição, que eu devia ter olhado primeiro: 94,6%
+dos negócios caem em [epoch, epoch+passo] com mediana +132s contra os +150
+esperados, e nos mercados de 15 minutos +603s contra 450.
+
+Sobreviveu porque a perda foi grande o suficiente para se notar — 96 mil de 1,9
+milhões salta à vista. **Uma perda de 20% teria passado**, e o que eu publicaria
+seria o +0,509. O `derive` passou a exigir o passo e a levantar erro em vez de
+assumir, e o número fica como registo do que a nomenclatura herdada custa.
+
+## O que isto acrescenta ao estudo
+
+**A ronda 5 replica fora do seu domínio.** Foi medida em 160 ações americanas
+com barras horárias; aparece igual em dois ativos que negociam 24/7, ao minuto,
+em 2026, com a mesma definição de perfil e o mesmo teste de envelhecimento
+plano. É a primeira vez que algo deste projeto replica num mercado sem nada em
+comum com aquele onde foi encontrado. **E ganhou um mecanismo**: não é "há um J
+intradiário", é "a volatilidade segue a sessão de Nova Iorque, mesmo em ativos
+que não fecham".
+
+**E fecha-a como oportunidade.** A sazonalidade é real, estável no
+envelhecimento, e **já está no preço** — declive 1,099 ± 0,111 e 0,991 ± 0,070,
+com a hipótese "o mercado ignora-a" excluída a 4,3 e 3,6 sigma por uma medida
+independente. Não é falta de poder: é a resposta.
+
+É a terceira vez seguida que o mesmo controlo decide uma ronda. A ronda 22 matou
+o eth5m com as réplicas naturais e a perícia das carteiras com a metade seguinte;
+a ronda 23 mata o btc15m da mesma maneira. O teste de partir a amostra em duas e
+repetir é, até agora, o instrumento mais produtivo do programa — e todas as vezes
+produziu um não.
+
+
+---
+
 # Síntese do programa de investigação
 
 Quatro rondas, e um padrão consistente: **sempre que um número pareceu bom, foi
@@ -2472,6 +2714,7 @@ a inspecção mais fina que o explicou.**
 | 14 | Em regimes de queda, o sinal rende +7% a +8% anualizados em 3 dos 4 regimes | O mínimo detectável é 3 a 6× maior do que o efeito: amostra cega, não nulo medido. Faltam 13 a 42 anos |
 | 15 | Forma da cauda persiste 20 anos, ortogonal à volatilidade, placebo p=0,005 | Verdadeiro e bem testado — e já publicado. Kelly & Jiang têm AR(1) 0,927 na série de cauda; a ortogonalidade também é conhecida |
 | 16 | Sem dias de resultados a tendência perde significância, logo os resultados explicam-na | Falácia: a diferença entre significativo e não significativo não é significativa. Testada a diferença de declives, IC95% inclui zero |
+| 23 | Previsão assinada do btc5m a dar +0,509 (p=0,011) — significativa e com o sinal ao contrário do previsto | Eu li o nome da coluna `end_epoch` em vez de medir: o epoch é o INÍCIO da janela, e o filtro `tau > 0` deitou fora 1,8 dos 1,9 milhões de negócios. Corrigido, dá +0,009 |
 
 ## O que ficou estabelecido
 
@@ -2543,7 +2786,18 @@ a inspecção mais fina que o explicou.**
 
 5. **A volatilidade é previsível** por sazonalidade intradiária — e essa
    sazonalidade é **estável**: um perfil de há 12 meses funciona tão bem como
-   um do mês passado (ronda 5). É a descoberta durável do projecto.
+   um do mês passado (ronda 5). É a descoberta durável do projecto, e a ronda
+   23 deu-lhe as duas coisas que lhe faltavam. **Replica fora do domínio onde
+   foi encontrada**: medida em 160 acções americanas com barras horárias,
+   aparece igual em BTC e ETH ao minuto (Spearman 0,164 e 0,152 contra 0,000
+   com as horas embaralhadas), com o mesmo envelhecimento plano — um perfil de
+   três semanas vale um de ontem. **E ganhou mecanismo**: o pico é às 13-15 UTC,
+   que são as 09:30-11:00 de Nova Iorque, com segunda corcova à 01-02 (Ásia).
+   Activos que nunca fecham têm o relógio de volatilidade da bolsa que fecha.
+   A amplitude é menor que em acções (2,36× contra 4,09×) e, à escala do dia, o
+   perfil deriva de facto: a dispersão diária é duas vezes o chão de ruído
+   simulado. **O que a ronda 23 também fechou é a esperança de a negociar** —
+   ver o ponto 12.
 6. **Existe sinal residual genuíno** depois de tirar calendário e inércia:
    Spearman 0,17 a 1h, IC95% [0,153, 0,185].
 7. **O modelo detecta eventos de cauda** 2,98× melhor que o acaso.
@@ -2581,6 +2835,18 @@ a inspecção mais fina que o explicou.**
     ligeiramente abaixo da média. Quem ganha de forma consistente tem
     variância zero: são arbitragistas, não previsores.
 
+12. **A sazonalidade da volatilidade já está no preço** (ronda 23). Invertendo
+    p = Phi(d) em 3,1 milhões de negócios da Polymarket obtém-se a volatilidade
+    que o mercado cota, hora a hora. O declive do perfil implícito sobre o
+    realizado — 1,0 significa cotar a sazonalidade inteira, 0 ignorá-la — é
+    **+1,099 ± 0,111** no BTC de 5 minutos e **+0,991 ± 0,070** no ETH. A
+    previsão assinada que decorre de o mercado a ignorar (favoritos caros nas
+    horas voláteis) não aparece: +0,0111 ± 0,0268 contra os **−0,105** que um
+    mercado ignorante produziria na mesma amostra — excluído a 4,3 sigma. Não é
+    falta de poder, é a resposta. O btc15m parecia cotar só três quartos
+    (0,751 ± 0,126) por duas medidas independentes, mas as duas metades da
+    amostra dão 0,325 ± 0,176 e 1,057 ± 0,165, três sigma uma da outra.
+
 O ponto 7 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.
 
@@ -2593,3 +2859,9 @@ sistemática contra a alternativa gratuita mais simples.
 
 Foi esse aparelho que apanhou, uma a uma, quatro conclusões erradas que eu
 próprio tinha produzido. O valor está aí.
+
+E das suas peças, a mais produtiva acabou por ser a mais simples: **partir a
+amostra em duas metades no tempo e repetir a medição**. Matou o eth5m e a
+perícia das carteiras na ronda 22, e o btc15m na ronda 23. Todas as vezes
+produziu um não — que é precisamente o que um instrumento calibrado deve fazer
+num programa onde quase nada é real.

@@ -1325,6 +1325,67 @@ Encontrei o desvio a cair com a espessura do mercado, Spearman −0,297
 um mercado que vira no fim atrai muito mais negociação. Medindo a espessura só
 nos primeiros 60s, o efeito cai para −0,130 — mais de metade era artefacto.
 
+## Sazonalidade de volatilidade: existe em cripto, e o mercado cota-a inteira
+
+`src/research/volatility_seasonality.py`. 28 dias de barras de um minuto de BTC
+e ETH, mais **3 964 mercados e 3,1 milhões de negócios** da Polymarket colhidos
+ao longo de 20 dias.
+
+A ronda 5 estabeleceu a única descoberta durável do projeto: a volatilidade
+intradiária tem uma forma estável por hora do dia. Esta ronda testou-a onde ela
+não tinha nenhuma razão óbvia para existir — em ativos que negociam 24/7 e não
+têm leilão de abertura — e depois perguntou se o mercado paga por ela.
+
+### Existe, e é a sessão de Nova Iorque importada
+
+| | BTC | ETH | ronda 5 (ações) |
+|---|---|---|---|
+| Spearman do perfil | **0,1645** | 0,1517 | 0,3078 |
+| com as horas embaralhadas | +0,0001 | −0,0002 | — |
+| amplitude | 2,36× | 2,09× | 4,09× |
+
+Pico às **13–15 UTC** — as 09:30–11:00 de Nova Iorque — com segunda corcova à
+01–02 (Ásia) e vale às 20–21. Um ativo que nunca fecha tem o relógio de
+volatilidade da bolsa que fecha. O envelhecimento é plano, como nas ações: um
+perfil de três semanas vale um de ontem.
+
+### Porque é que a pergunta é testável aqui
+
+Num mercado "Up ou Down" o strike é o preço no início da janela, logo no
+instante zero P(Up) = 0,5 **para qualquer volatilidade**. A meio da janela,
+`p = Phi((S_t − K) / (sigma·raiz(tau)))` e sigma manda em tudo. Isso dá uma
+previsão assinada — nas horas voláteis os favoritos deviam estar caros — e um
+placebo de graça: perto de p = 0,5 o preço não contém informação sobre sigma.
+
+### O mercado cota-a inteira
+
+Invertendo a fórmula negócio a negócio obtém-se a volatilidade implícita. O
+declive do perfil implícito sobre o realizado (**1,0 = cota a sazonalidade
+inteira, 0 = ignora-a**):
+
+| família | declive | correlação |
+|---|---|---|
+| btc5m | **+1,099 ± 0,111** | +0,811 |
+| eth5m | **+0,991 ± 0,070** | +0,857 |
+| btc15m | +0,751 ± 0,126 | +0,693 |
+
+E a previsão assinada não aparece: **+0,0111 ± 0,0268** no btc5m, contra os
+**−0,105** que um mercado ignorante produziria na mesma amostra — excluído a
+4,3 sigma. Não é falta de poder, é a resposta.
+
+O btc15m parecia cotar só três quartos, pelas duas medidas ao mesmo tempo. As
+duas metades da amostra dão **0,325 ± 0,176** e **1,057 ± 0,165**: três sigma
+uma da outra, portanto não duas medidas da mesma coisa.
+
+### Um erro meu, apanhado porque foi grande
+
+A coluna da ronda 22 chama-se `end_epoch` e eu li o nome em vez de medir. O
+epoch do slug é o **início** da janela: o meu filtro `tau > 0` deitou fora
+**1,8 dos 1,9 milhões** de negócios do btc5m e, nessa amostra esquisita, a
+previsão assinada lia +0,509 com p = 0,011 — significativa e com o sinal ao
+contrário do previsto. Sobreviveu porque a perda foi grande o suficiente para
+se notar; uma perda de 20% teria passado.
+
 ## Testes
 
 ```bash
@@ -1386,6 +1447,17 @@ src/research/           EXPERIENCIAS (ver RESEARCH.md)
                         escala, residualizacao, decadencia e placebo
   scheduled_news_share.py  a subida da concentracao vem dos resultados
                         trimestrais? teste da diferenca de declives
+  pivot_bracket.py      bracket de pivots 25/5: ponto morto S/(S+A), tres
+                        modelos de preenchimento e grelha de ruido
+  connors_rsi2.py       RSI(2) de Connors em 222 accoes desde 1962, com
+                        placebos, custos por era e carteira
+  live_simulation.py    simulacao ao minuto com conta em euros: custos,
+                        margem, ruina e dimensionamento fixo vs proporcional
+  prediction_market.py  calibracao de um mercado de previsao, pericia das
+                        carteiras e arbitragem (dados publicos da Polymarket)
+  volatility_seasonality.py  a sazonalidade da ronda 5 em cripto e no preco:
+                        perfil horario com chao de ruido, vol implicita
+                        invertida do digital e previsao assinada
 
 src/decision/           CAMADA DE DECISAO (tabela de verdade)
   panel.py              grelha diaria comum + alvo neutro ao mercado + percentis do dia
