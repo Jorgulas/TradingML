@@ -2690,6 +2690,128 @@ a ronda 23 mata o btc15m da mesma maneira. O teste de partir a amostra em duas e
 repetir é, até agora, o instrumento mais produtivo do programa — e todas as vezes
 produziu um não.
 
+## Adenda — eth15m com a mesma recolha, e o desenho 2×2 fechado
+
+O eth15m era a única família ainda na recolha da ronda 22: 250 mercados em 2,6
+dias, uma passagem por cada hora do dia. Recolhido com o `stride` da ronda 23
+ficou em **1 085 mercados, 210 011 negócios, 21 dias**, e é agora a medição mais
+apertada das quatro — concordância de strike **89,5%**, a melhor do conjunto.
+
+| | declive da vol implícita | Spearman | metades | nitidez |
+|---|---|---|---|---|
+| **eth15m** | **+1,052 ± 0,052** | +0,897 | 0,897 / 1,102 | +0,0363 ± 0,0305 |
+
+A hipótese "o mercado ignora a sazonalidade" (−0,105) fica a **4,6 sigma** — a
+exclusão mais forte das quatro famílias. A amplitude implícita é 2,61× contra
+2,09× realizada, e a persistência do erro é −0,081, dentro do ruído.
+
+### O desenho fica fechado, e o btc15m morre pela segunda vez
+
+| | 5 minutos | 15 minutos |
+|---|---|---|
+| **BTC** | +1,099 ± 0,111 | **+0,751 ± 0,126** |
+| **ETH** | +0,991 ± 0,070 | **+1,052 ± 0,052** |
+
+Três das quatro células estão em 1,0. O btc15m é a única fora, e agora falha os
+**dois** controlos independentes: a sua própria partição em metades (0,325 ±
+0,176 contra 1,057 ± 0,165, três sigma uma da outra) e a réplica natural —
+mesma duração, outro ativo — que dá 1,052 ± 0,052. **A duração de 15 minutos
+não tem nada de especial.**
+
+Verifiquei também a explicação mecânica antes de aceitar a estatística: um tick
+mais grosso no btc15m achataria o perfil implícito sozinho. As quatro famílias
+têm o mesmo tick declarado (0,001) e granularidade efetiva igual (88,3% a 93,8%
+dos negócios em cêntimos redondos). Não era o tick.
+
+---
+
+## O que a amostra maior fez à ronda 22
+
+Com 4 798 mercados e 3,31 milhões de negócios — 3,8× a ronda 22 — a calibração
+podia ser remedida. Três coisas apareceram, e a terceira obrigou-me a mudar de
+estimador.
+
+### 1. O único positivo da ronda 22 reduz-se a metade
+
+O eth5m dava +0,00940 [+0,0041, +0,0146] em 700 mercados de três dias. Nos
+**829 mercados de 19 dias novos**: **+0,00485 [−0,00002, +0,00991]** — metade do
+ponto estimado, com o intervalo a tocar o zero. Agregado: +0,00663.
+
+E o eth15m confirma o que a ronda 22 dizia dele: **+0,00296 [−0,00035,
++0,00638]**, zero, agora com 1 084 mercados em vez de 250.
+
+### 2. O positivo MUDOU de família
+
+O maior desvio é agora o do **btc15m: +0,01433 [+0,00705, +0,02143]**, e
+sobrevive à própria partição em metades (+0,0109 e +0,0179). Mas falha as duas
+réplicas naturais: eth15m (mesma duração) +0,0030 e btc5m (mesmo ativo)
++0,0020, ambos zero. Concentra-se na banda 0,5–0,8, a +0,0332.
+
+É o mesmo padrão que a ronda 22 descreveu para o eth5m — uma família em quatro,
+a falhar os dois eixos de réplica. **E o facto de o positivo ter trocado de
+família quando os dados triplicaram é, por si, a evidência mais forte de que
+nenhum dos dois é real.** Um efeito específico de uma família ficaria na mesma
+família.
+
+Nas 16 células de família × banda de preço, uma ou duas têm intervalo a excluir
+o zero. Com intervalos a 95%, esperam-se 0,8.
+
+### 3. O agregado passa a excluir o zero — e o estimador está errado
+
+A ronda 22 mediu +0,00285 [−0,00161, +0,00698] e não conseguiu resolver. Com
+3,8× os mercados: **+0,00588 [+0,00328, +0,00845]**, mínimo detetável 0,00198.
+Parecia o primeiro positivo com poder a sério do programa todo.
+
+Não é, e a decomposição diz porquê. O desvio está **todo num lado da direção**:
+
+| | n | desvio |
+|---|---|---|
+| aposta em **Down** | 1 659 734 | **+0,01200** |
+| aposta em **Up** | 1 647 955 | **−0,00028** |
+
+Isso não é um erro de nível de preços — é direcional. E a janela explica-o: nos
+mesmos 27 dias o **BTC caiu 4,62% e o ETH 13,38%**, e "Up" ganhou em 47,2% a
+50,5% dos mercados. A razão deriva/sigma a 5 minutos é −0,0054 no BTC e −0,0121
+no ETH, que vale 0,2 a 0,5 pontos de probabilidade num digital — a ordem de
+grandeza do que medi.
+
+**Uma janela de três semanas tem um caminho realizado: n = 1 para a deriva.**
+Medir "o Down está barato" numa amostra onde o preço caiu 13% é medir a queda.
+
+### O estimador certo, e o que ele diz
+
+Num livro equilibrado a preços consistentes o desvio é **identicamente zero**,
+aconteça o que acontecer: se "Up" ganha, a aposta em "Up" ganha 1−p e a aposta
+em "Down" perde 1−p, e somam zero sem olhar ao desfecho. Logo **qualquer desvio
+agregado não nulo mede desequilíbrio de fluxo, não o nível de preços** — e o
+peso por volume mede a sorte direcional do fluxo registado.
+
+Forçando cada mercado a contribuir "Up" e "Down" em peso igual, a sorte
+direcional cancela por construção:
+
+| família | ponderado por volume | **livro equilibrado** | soma do par |
+|---|---|---|---|
+| tudo | +0,00588 [+0,0033, +0,0085] | **−0,03415 [−0,0350, −0,0334]** | 1,0683 |
+| btc5m | +0,00199 | −0,03151 | 1,0630 |
+| btc15m | +0,01433 | −0,02665 | 1,0533 |
+| eth5m | +0,00663 | −0,04364 | 1,0873 |
+| eth15m | +0,00296 | −0,03022 | 1,0604 |
+
+**O tomador perde 3,4 pontos de probabilidade por aposta.** É exatamente metade
+do prémio do par: o par médio pago soma **1,0683**, portanto 6,8 pontos acima de
+um dólar. Está em três testes novos, incluindo o que prova que a média
+ponderada por volume inventa um desvio grande onde o livro equilibrado lê zero.
+
+Isso põe os candidatos no seu lugar: o melhor de todos, o +1,43pp do btc15m, é
+**2,4 vezes menor** que o custo; o +0,66pp do eth5m, cinco vezes menor. E o
+`takerBaseFee` declarado é 1000 em todas as quatro famílias, para tomador *e*
+criador — ainda antes de somar isso.
+
+A conclusão da ronda 22 não muda, **fica mais forte e com um número melhor**: o
+que lá se leu como "calibrado a ±0,5pp" é, medido sem a sorte direcional,
+calibrado menos um custo de 3,4pp por aposta que nenhum efeito encontrado em
+duas rondas chega a metade de cobrir.
+
 
 ---
 
@@ -2843,9 +2965,24 @@ a inspecção mais fina que o explicou.**
     previsão assinada que decorre de o mercado a ignorar (favoritos caros nas
     horas voláteis) não aparece: +0,0111 ± 0,0268 contra os **−0,105** que um
     mercado ignorante produziria na mesma amostra — excluído a 4,3 sigma. Não é
-    falta de poder, é a resposta. O btc15m parecia cotar só três quartos
-    (0,751 ± 0,126) por duas medidas independentes, mas as duas metades da
-    amostra dão 0,325 ± 0,176 e 1,057 ± 0,165, três sigma uma da outra.
+    falta de poder, é a resposta. **O desenho 2×2 fecha-o**: três das quatro
+    famílias estão em 1,0 (eth5m 0,991 ± 0,070, eth15m 1,052 ± 0,052) e a
+    quarta, o btc15m com 0,751 ± 0,126, falha os dois controlos — as suas
+    próprias metades dão 0,325 ± 0,176 e 1,057 ± 0,165, e a réplica de mesma
+    duração noutro ativo dá 1,052 ± 0,052.
+
+13. **Num mercado binário, a média de desvio ponderada por volume não mede o
+    nível de preços** (ronda 23). Num livro equilibrado a preços consistentes o
+    desvio é identicamente zero, aconteça o que acontecer aos desfechos — logo
+    qualquer agregado não nulo mede desequilíbrio de fluxo. Sobre 4 798 mercados
+    o agregado ponderado dá +0,00588 [+0,00328, +0,00845], que parecia o
+    primeiro positivo com poder do programa; mas está todo do lado "Down"
+    (+0,0120 contra −0,0003 em "Up") numa janela em que o BTC caiu 4,62% e o ETH
+    13,38%, e três semanas têm **um** caminho realizado. Forçando cada mercado a
+    contribuir os dois lados em peso igual, o desvio é **−0,03415 [−0,0350,
+    −0,0334]** — metade do prémio de 6,8pp que o tomador paga pelo par. É o
+    custo que qualquer efeito tem de cobrir, e o melhor candidato de duas rondas
+    (+1,43pp) é 2,4× menor.
 
 O ponto 7 é competência real que não se converteu em valor em nenhuma das três
 aplicações testadas. Isso não o torna falso — torna-o insuficiente.

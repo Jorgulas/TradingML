@@ -1373,9 +1373,49 @@ E a previsão assinada não aparece: **+0,0111 ± 0,0268** no btc5m, contra os
 **−0,105** que um mercado ignorante produziria na mesma amostra — excluído a
 4,3 sigma. Não é falta de poder, é a resposta.
 
-O btc15m parecia cotar só três quartos, pelas duas medidas ao mesmo tempo. As
-duas metades da amostra dão **0,325 ± 0,176** e **1,057 ± 0,165**: três sigma
-uma da outra, portanto não duas medidas da mesma coisa.
+O desenho 2×2 está fechado (4 798 mercados, 3,31 milhões de negócios):
+
+| | 5 minutos | 15 minutos |
+|---|---|---|
+| **BTC** | +1,099 ± 0,111 | **+0,751 ± 0,126** |
+| **ETH** | +0,991 ± 0,070 | +1,052 ± 0,052 |
+
+O btc15m é a única célula fora de 1,0, e falha os **dois** controlos: as suas
+próprias metades dão **0,325 ± 0,176** e **1,057 ± 0,165** (três sigma uma da
+outra) e a réplica de mesma duração noutro ativo dá 1,052 ± 0,052. As quatro
+famílias têm o mesmo tick, por isso não é discretização.
+
+### Um estimador que estava errado desde a ronda 22
+
+Com 3,8× os mercados da ronda 22, o desvio de calibração agregado passa a
+excluir o zero: **+0,00588 [+0,00328, +0,00845]**. Parecia o primeiro positivo
+com poder a sério do projeto. Não é.
+
+Num livro equilibrado a preços consistentes o desvio é **identicamente zero**,
+aconteça o que acontecer aos desfechos — se "Up" ganha, a aposta em "Up" ganha
+1−p e a aposta em "Down" perde 1−p. Logo qualquer agregado não nulo mede
+**desequilíbrio de fluxo**, não o nível de preços. E de facto está todo de um
+lado: **+0,0120 nas apostas em "Down" contra −0,0003 nas apostas em "Up"**,
+numa janela em que o BTC caiu 4,62% e o ETH 13,38% e "Up" ganhou 47–50% dos
+mercados. Três semanas têm um caminho realizado: n = 1 para a deriva.
+
+Forçando cada mercado a contribuir os dois lados em peso igual, a sorte
+direcional cancela por construção:
+
+| | ponderado por volume | **livro equilibrado** | soma do par |
+|---|---|---|---|
+| tudo | +0,00588 | **−0,03415 [−0,0350, −0,0334]** | 1,0683 |
+
+**O tomador perde 3,4 pontos de probabilidade por aposta** — metade do prémio
+de 6,8pp que paga pelo par. O melhor candidato de duas rondas de procura
+(+1,43pp no btc15m) é 2,4× menor que isso. E o `takerBaseFee` declarado é 1000
+nas quatro famílias, para tomador e criador, antes de somar isso.
+
+O único positivo da ronda 22 também encolheu: o eth5m dava +0,00940 em 700
+mercados de três dias e dá **+0,00485 [−0,00002, +0,00991]** em 829 mercados de
+19 dias novos. E o maior desvio **mudou de família** (é agora o btc15m) quando
+os dados triplicaram — o que é, por si, a evidência mais forte de que nenhum dos
+dois é real.
 
 ### Um erro meu, apanhado porque foi grande
 

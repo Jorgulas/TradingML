@@ -385,3 +385,86 @@ def test_dollar_weighting_follows_the_money():
 def test_calibration_buckets_cover_the_whole_range():
     assert W.BUCKETS[0] == 0.0 and W.BUCKETS[-1] == 1.0
     assert list(W.BUCKETS) == sorted(W.BUCKETS)
+
+
+# ---------------------------------------------------------------------------
+# Desvio com livro equilibrado (ronda 23) -- porque a media ponderada por
+# volume nao mede o nivel de precos
+# ---------------------------------------------------------------------------
+
+def _book(pairs, winners):
+    """Um mercado por par (preco de Up, preco de Down), com um negocio de cada
+    lado e o vencedor dado."""
+    rows = []
+    for index, ((up_price, down_price), winner) in enumerate(zip(pairs, winners)):
+        rows += [
+            {"condition_id": f"m{index}", "wallet": "w", "side": "BUY",
+             "outcome": "Up", "price": up_price, "size": 1.0, "ts": 0,
+             "tx": f"a{index}", "winner": winner, "family": "x", "end_epoch": 0},
+            {"condition_id": f"m{index}", "wallet": "w", "side": "BUY",
+             "outcome": "Down", "price": down_price, "size": 1.0, "ts": 0,
+             "tx": f"b{index}", "winner": winner, "family": "x", "end_epoch": 0},
+        ]
+    frame = pd.DataFrame(rows)
+    buy = frame["side"].str.upper() == "BUY"
+    frame["stake_price"] = np.where(buy, frame["price"], 1.0 - frame["price"])
+    hit = frame["outcome"] == frame["winner"]
+    frame["won"] = np.where(buy, hit, ~hit)
+    return frame
+
+
+def test_um_livro_equilibrado_a_precos_consistentes_da_zero_exacto():
+    """A propriedade de que tudo depende: com o par a somar exactamente 1, o
+    desvio e' zero aconteca o que acontecer com os desfechos. E' por isso que
+    um desvio agregado nao nulo nunca pode ser lido como "o nivel de precos
+    esta' errado" -- tem de vir de desequilibrio de fluxo ou do premio do par."""
+    pares = [(0.30, 0.70), (0.80, 0.20), (0.55, 0.45), (0.99, 0.01)]
+    for vencedores in (["Up"] * 4, ["Down"] * 4, ["Up", "Down", "Up", "Down"]):
+        out = W.balanced_deviation(_book(pares, vencedores), draws=200)
+        assert out["desvio"] == pytest.approx(0.0, abs=1e-12)
+        assert out["soma_do_par"] == pytest.approx(1.0)
+
+
+def test_o_desvio_equilibrado_e_menos_metade_do_premio_do_par():
+    """Com o par a somar 1,07 -- que e' o que o tomador paga de facto -- o
+    desvio equilibrado tem de ser exactamente -3,5pp, metade do premio,
+    independentemente de quem ganha."""
+    pares = [(0.40, 0.67), (0.735, 0.335), (0.60, 0.47)]
+    for vencedores in (["Up"] * 3, ["Down"] * 3):
+        out = W.balanced_deviation(_book(pares, vencedores), draws=200)
+        assert out["premio_do_par"] == pytest.approx(0.07, abs=1e-9)
+        assert out["desvio"] == pytest.approx(-0.035, abs=1e-9)
+
+
+def test_a_media_ponderada_por_volume_inventa_desvio_que_o_equilibrado_nao_ve():
+    """O artefacto, reproduzido. Mesmo mercado, precos consistentes (par = 1),
+    mas o fluxo registado esta' carregado de um lado -- e esse lado ganha. A
+    media ponderada por volume le um desvio grande; o livro equilibrado le
+    zero, que e' a verdade sobre os precos."""
+    rows = []
+    for index in range(40):
+        for repeticao in range(9):            # nove apostas em "Down"
+            rows.append({"condition_id": f"m{index}", "wallet": "w",
+                         "side": "BUY", "outcome": "Down", "price": 0.60,
+                         "size": 1.0, "ts": 0, "tx": f"d{index}-{repeticao}",
+                         "winner": "Down", "family": "x", "end_epoch": 0})
+        rows.append({"condition_id": f"m{index}", "wallet": "w", "side": "BUY",
+                     "outcome": "Up", "price": 0.40, "size": 1.0, "ts": 0,
+                     "tx": f"u{index}", "winner": "Down", "family": "x",
+                     "end_epoch": 0})
+    frame = pd.DataFrame(rows)
+    frame["stake_price"] = frame["price"]
+    frame["won"] = frame["outcome"] == frame["winner"]
+    frame["desvio_unitario"] = frame["won"] - frame["stake_price"]
+
+    ponderado = frame["desvio_unitario"].mean()
+    equilibrado = W.balanced_deviation(frame, draws=200)
+    assert ponderado > 0.25
+    assert equilibrado["desvio"] == pytest.approx(0.0, abs=1e-12)
+
+
+def test_a_direccao_da_aposta_sobrevive_a_venda():
+    frame = pd.DataFrame([
+        {"side": "BUY", "outcome": "Up"}, {"side": "SELL", "outcome": "Down"},
+        {"side": "BUY", "outcome": "Down"}, {"side": "SELL", "outcome": "Up"}])
+    assert W.bet_direction(frame).tolist() == ["up", "up", "down", "down"]

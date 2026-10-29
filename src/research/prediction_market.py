@@ -495,6 +495,53 @@ def luck_baseline(table: pd.DataFrame, threshold: float = 2.0) -> dict:
 # A arbitragem do gabagool22 ainda existe?
 # ---------------------------------------------------------------------------
 
+def bet_direction(frame: pd.DataFrame) -> pd.Series:
+    """Em que lado a aposta fica DEPOIS de normalizada: vender "Down" e' apostar
+    em "Up"."""
+    buy = frame["side"].str.upper() == "BUY"
+    up = frame["outcome"].str.lower() == "up"
+    return pd.Series(np.where(buy == up, "up", "down"), index=frame.index)
+
+
+def balanced_deviation(frame: pd.DataFrame, draws: int = 4000,
+                       seed: int = 23) -> dict:
+    """Desvio com cada mercado a contribuir "Up" e "Down" em PESO IGUAL.
+
+    PORQUE E' ISTO E NAO A MEDIA PONDERADA POR VOLUME. Num livro equilibrado a
+    precos consistentes o desvio e' IDENTICAMENTE ZERO, aconteca o que
+    acontecer: se "Up" ganha, a aposta em "Up" ganha 1-p e a aposta em "Down"
+    perde 1-p, e as duas somam zero sem olhar ao desfecho. Logo qualquer desvio
+    agregado nao nulo mede duas coisas, e nenhuma delas e' o nivel de precos:
+    o DESEQUILIBRIO do fluxo registado, e o quanto a soma do par se afasta de
+    um dolar.
+
+    Forcar o equilibrio por mercado cancela a sorte direccional por construcao
+    -- que e' o que nao se pode fazer com 21 dias de dados, porque uma janela
+    de tres semanas tem UM caminho realizado e n=1 para a deriva. O que sobra
+    e' o custo: metade do premio que o tomador paga pelo par."""
+    if frame.empty:
+        return {}
+    work = frame.copy()
+    work["direccao"] = bet_direction(work)
+    work["desvio_unitario"] = work["won"] - work["stake_price"]
+    wide = work.groupby(["condition_id", "direccao"])["desvio_unitario"] \
+               .mean().unstack().dropna()
+    if wide.empty or not {"up", "down"} <= set(wide.columns):
+        return {}
+    values = ((wide["up"] + wide["down"]) / 2.0).to_numpy(float)
+    prices = work.groupby(["condition_id", "direccao"])["stake_price"] \
+                 .mean().unstack().dropna()
+    pair = (prices["up"] + prices["down"]).to_numpy(float)
+    rng = np.random.default_rng(seed)
+    means = np.array([values[rng.integers(0, len(values), len(values))].mean()
+                      for _ in range(draws)])
+    return {"mercados": int(len(values)), "desvio": float(values.mean()),
+            "ic_baixo": float(np.quantile(means, 0.025)),
+            "ic_alto": float(np.quantile(means, 0.975)),
+            "soma_do_par": float(pair.mean()),
+            "premio_do_par": float(pair.mean() - 1.0)}
+
+
 def pair_arbitrage(frame: pd.DataFrame, window: int = 2) -> pd.DataFrame:
     """Compra-se "Up" e "Down" ao mesmo tempo: se o par custar menos de 1
     dolar, o lucro e' certo e nao depende do preco do Bitcoin.
